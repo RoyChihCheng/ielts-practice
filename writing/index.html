@@ -28,11 +28,19 @@
 <div class="part-banner"><strong id="partTitle">Writing</strong><span id="partHint">從「題庫」選擇題目後開始寫作。</span><small id="filename"></small></div>
 <main class="layout">
   <section class="pane document" aria-label="寫作題目">
-    <div class="view-controls"><button id="viewText" type="button" class="active">題目</button><button id="viewPdf" type="button">原始 PDF</button><button id="focus" type="button" aria-pressed="false">專注閱讀</button></div>
+    <div class="view-controls"><button id="viewText" type="button" class="active">題目</button><button id="viewPdf" type="button">原始 PDF</button><button id="notesBtn" type="button" title="筆記、畫重點與下載">筆記</button><button id="focus" type="button" aria-pressed="false">專注閱讀</button></div>
     <div class="empty" id="empty"><span class="empty-mark">W</span><strong>開始你的寫作練習</strong><p>題目與圖表顯示在左側，右側為作答區；和電腦考一樣沒有拼字檢查。</p><button id="emptyLibrary" type="button" class="primary">開啟題庫</button></div>
     <article id="textView" class="text-view" hidden></article>
     <iframe id="viewer" title="寫作講義 PDF" hidden></iframe>
     <a id="pdfLink" hidden target="_blank" rel="noopener">另開 PDF（若瀏覽器無法內嵌顯示）</a>
+    <aside id="notesPanel" class="notes-panel" hidden aria-label="筆記">
+      <div class="notes-head"><h2>我的筆記</h2><button id="notesClose" type="button" aria-label="關閉筆記">✕</button></div>
+      <label class="notes-label" for="notesText">隨手筆記</label>
+      <textarea id="notesText" rows="4" placeholder="構想、論點、可用的句型與單字…"></textarea>
+      <h3>畫重點與註記</h3>
+      <div id="marksList" class="marks-list"></div>
+      <button id="downloadNotes" type="button" class="primary download-notes">下載筆記</button>
+    </aside>
   </section>
   <div id="splitter" class="splitter" role="separator" aria-label="拖曳調整題目與作答區寬度" aria-orientation="vertical" tabindex="0"></div>
   <section class="pane work" aria-label="作答區">
@@ -44,6 +52,9 @@
     <p class="notice">作答自動保存在此瀏覽器。換裝置或清除瀏覽器資料前，請從「工具」下載備份。</p>
   </section>
 </main>
+<div id="hlbar" class="hlbar" hidden role="toolbar" aria-label="螢光筆">
+  <button type="button" data-color="yellow" class="sw sw-yellow" aria-label="黃色螢光筆"></button><button type="button" data-color="green" class="sw sw-green" aria-label="綠色螢光筆"></button><button type="button" data-color="pink" class="sw sw-pink" aria-label="粉紅色螢光筆"></button><button type="button" data-color="blue" class="sw sw-blue" aria-label="藍色螢光筆"></button><button type="button" data-action="note" class="hl-note">註記</button><button type="button" data-action="remove" class="hl-remove">移除</button>
+</div>
 <dialog id="library" class="library" aria-label="題庫">
   <div class="library-head"><h2>寫作題庫</h2><input id="librarySearch" type="search" placeholder="搜尋題目或週次，例如 week 8、maps" aria-label="搜尋題目"><button id="libraryClose" type="button" aria-label="關閉">✕</button></div>
   <div id="libraryList" class="library-list"></div>

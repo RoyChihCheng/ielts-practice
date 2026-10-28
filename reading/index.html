@@ -27,11 +27,19 @@
 <div class="part-banner"><strong id="partTitle">Reading</strong><span id="partHint">從「題庫」選擇文章後開始作答。</span><small id="filename"></small></div>
 <main class="layout">
   <section class="pane document" aria-label="閱讀文章">
-    <div class="view-controls"><button id="viewText" type="button" class="active">文章</button><button id="viewPdf" type="button">原始 PDF</button><button id="highlightBtn" type="button" title="選取文字後按此畫重點；也可按右鍵">畫重點</button><button id="focus" type="button" aria-pressed="false">專注閱讀</button></div>
-    <div class="empty" id="empty"><span class="empty-mark">R</span><strong>準備好開始了嗎？</strong><p>文章顯示在左側，題目和作答格在右側。選取文字後按右鍵（或「畫重點」）可畫重點。</p><button id="emptyLibrary" type="button" class="primary">開啟題庫</button></div>
+    <div class="view-controls"><button id="viewText" type="button" class="active">文章</button><button id="viewPdf" type="button">原始 PDF</button><button id="notesBtn" type="button" title="筆記、畫重點與下載">筆記</button><button id="focus" type="button" aria-pressed="false">專注閱讀</button></div>
+    <div class="empty" id="empty"><span class="empty-mark">R</span><strong>準備好開始了嗎？</strong><p>文章顯示在左側，題目和作答格在右側。選取文字就會出現螢光筆，可畫重點、寫註記，最後一鍵對答案。</p><button id="emptyLibrary" type="button" class="primary">開啟題庫</button></div>
     <article id="textView" class="text-view" hidden></article>
     <iframe id="viewer" title="閱讀講義 PDF" hidden></iframe>
     <a id="pdfLink" hidden target="_blank" rel="noopener">另開 PDF（若瀏覽器無法內嵌顯示）</a>
+    <aside id="notesPanel" class="notes-panel" hidden aria-label="筆記">
+      <div class="notes-head"><h2>我的筆記</h2><button id="notesClose" type="button" aria-label="關閉筆記">✕</button></div>
+      <label class="notes-label" for="notesText">隨手筆記</label>
+      <textarea id="notesText" rows="4" placeholder="閱讀時的想法、生字、解題線索…"></textarea>
+      <h3>畫重點與註記</h3>
+      <div id="marksList" class="marks-list"></div>
+      <button id="downloadNotes" type="button" class="primary download-notes">下載筆記</button>
+    </aside>
   </section>
   <div id="splitter" class="splitter" role="separator" aria-label="拖曳調整文章與題目寬度" aria-orientation="vertical" tabindex="0"></div>
   <section class="pane work" aria-label="題目與作答">
@@ -41,7 +49,11 @@
     <p class="notice">作答自動保存在此瀏覽器。換裝置或清除瀏覽器資料前，請從「工具」下載備份。</p>
   </section>
 </main>
-<footer class="qbar"><button id="prevQ" type="button" aria-label="上一題">‹</button><nav id="qnav" class="qnav" aria-label="題號導覽"></nav><button id="nextQ" type="button" aria-label="下一題">›</button><span id="qcount" class="qcount"></span></footer>
+<footer class="qbar"><button id="prevQ" type="button" aria-label="上一題">‹</button><nav id="qnav" class="qnav" aria-label="題號導覽"></nav><button id="nextQ" type="button" aria-label="下一題">›</button><span id="qcount" class="qcount"></span><button id="checkBtn" type="button" class="check-btn" disabled>對答案</button></footer>
+<div id="hlbar" class="hlbar" hidden role="toolbar" aria-label="螢光筆">
+  <button type="button" data-color="yellow" class="sw sw-yellow" aria-label="黃色螢光筆"></button><button type="button" data-color="green" class="sw sw-green" aria-label="綠色螢光筆"></button><button type="button" data-color="pink" class="sw sw-pink" aria-label="粉紅色螢光筆"></button><button type="button" data-color="blue" class="sw sw-blue" aria-label="藍色螢光筆"></button><button type="button" data-action="note" class="hl-note">註記</button><button type="button" data-action="remove" class="hl-remove">移除</button>
+</div>
+
 <dialog id="library" class="library" aria-label="題庫">
   <div class="library-head"><h2>閱讀題庫</h2><input id="librarySearch" type="search" placeholder="搜尋題目或週次，例如 week 5、jellyfish" aria-label="搜尋題目"><button id="libraryClose" type="button" aria-label="關閉">✕</button></div>
   <div id="libraryList" class="library-list"></div>

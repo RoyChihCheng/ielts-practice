@@ -23,7 +23,7 @@
     if (kind === 'reading') {
       document.querySelectorAll('.answer-input').forEach(input => { input.value = drafts.answers[input.dataset.q - 1]; });
       document.querySelectorAll('#qnav button[data-q]').forEach(b => b.classList.toggle('answered', !!drafts.answers[b.dataset.q - 1].trim()));
-      updateCount();
+      if (checking) showResults(); else updateCount();
     } else {
       $('editor').value = drafts[task];
       updateWordCount();
@@ -44,11 +44,30 @@
     table.classList.toggle('has-head', table.rows.length > 2 && !head.querySelector('input') && !/^(?:[A-Z]|[ivx]+)$/.test(head.cells[0].textContent.trim()));
     return table;
   }
+  // The handout's bold/italic phrases for this line (item.fmt) are re-applied as <b>/<i>.
+  function rich(text, phrases) {
+    const frag = document.createDocumentFragment();
+    if (!text) return frag;
+    if (!phrases?.length) { frag.append(text); return frag; }
+    const sorted = [...phrases].sort((a, b) => b[1].length - a[1].length);
+    const pattern = new RegExp(sorted.map(p => `(?<!\\w)${p[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?!\\w)`).join('|'), 'g');
+    let last = 0;
+    for (const m of text.matchAll(pattern)) {
+      const style = sorted.find(p => p[1] === m[0])[0];
+      frag.append(text.slice(last, m.index));
+      const outer = document.createElement(style.includes('b') ? 'b' : 'i'); outer.textContent = m[0];
+      if (style === 'bi') { const inner = document.createElement('i'); inner.textContent = m[0]; outer.replaceChildren(inner); }
+      frag.append(outer); last = m.index + m[0].length;
+    }
+    frag.append(text.slice(last));
+    return frag;
+  }
+  const passageWords = item => countWords(item.passage.filter(l => !l.startsWith('[[IMG') && l !== item.title).join(' ').replace(/\|/g, ' '));
 
   // Reading: answer boxes are placed inline in the question text, like the computer-delivered test.
   const gapPattern = /(\d{1,2})\.?\s*(?:[.…]{3,}|_{3,})/g;
   const blankPattern = /[.…]{4,}|_{3,}/;
-  let currentQ = 0;
+  let currentQ = 0, checking = false;
   function updateCount() {
     const buttons = [...document.querySelectorAll('#qnav button[data-q]')];
     $('qcount').textContent = buttons.length ? `已作答 ${buttons.filter(b => b.classList.contains('answered')).length} / ${buttons.length}` : '';
@@ -58,7 +77,11 @@
     input.className = 'answer-input'; input.dataset.q = n; input.placeholder = n;
     input.autocomplete = 'off'; input.spellcheck = false; input.readOnly = locked;
     input.setAttribute('aria-label', `Question ${n}`);
-    input.addEventListener('input', () => { drafts.answers[n - 1] = input.value; save(); $('qnav').querySelector(`[data-q="${n}"]`)?.classList.toggle('answered', !!input.value.trim()); updateCount(); });
+    input.addEventListener('input', () => {
+      drafts.answers[n - 1] = input.value; save();
+      $('qnav').querySelector(`[data-q="${n}"]`)?.classList.toggle('answered', !!input.value.trim());
+      if (checking) showResults(); else updateCount();
+    });
     input.addEventListener('focus', () => { currentQ = n; document.querySelectorAll('#qnav button').forEach(b => b.classList.toggle('current', b.dataset.q === String(n))); });
     return input;
   }
@@ -72,32 +95,33 @@
     const start = item ? item.start : 1, end = item ? item.end : 40, used = new Set();
     const free = n => n >= start && n <= end && !used.has(n);
     // Replaces numbered gaps ("7 ......") in text with answer boxes; returns false if none were placed.
-    const fillGaps = (el, text) => {
+    const fillGaps = (el, text, phrases) => {
       let last = 0;
       for (const m of text.matchAll(gapPattern)) {
         const n = Number(m[1]); if (!free(n)) continue;
-        el.append(text.slice(last, m.index), answerInput(n)); used.add(n); last = m.index + m[0].length;
+        el.append(rich(text.slice(last, m.index), phrases), answerInput(n)); used.add(n); last = m.index + m[0].length;
       }
-      el.append(text.slice(last));
+      el.append(rich(text.slice(last), phrases));
       return last > 0;
     };
-    for (const line of item ? item.questions : []) {
-      if (/^Questions?\s+\d/i.test(line)) { const h = document.createElement('h3'); h.textContent = line; box.append(h); continue; }
-      const img = figure(line); if (img) { box.append(img); continue; }
-      if (line.includes(' | ')) { box.append(makeTable(line, fillGaps)); continue; }
+    (item ? item.questions : []).forEach((line, k) => {
+      const phrases = item.fmt?.q?.[k];
+      if (/^Questions?\s+\d/i.test(line)) { const h = document.createElement('h3'); h.textContent = line; box.append(h); return; }
+      const img = figure(line); if (img) { box.append(img); return; }
+      if (line.includes(' | ')) { box.append(makeTable(line, (td, cell) => fillGaps(td, cell, phrases))); return; }
       const p = document.createElement('p');
-      if (fillGaps(p, line)) { box.append(p); continue; }
+      if (fillGaps(p, line, phrases)) { box.append(p); return; }
       p.replaceChildren();
       const lead = line.match(/^(\d{1,2})\.?\s+(\S[\s\S]*)$/);
       if (lead && free(Number(lead[1]))) {
         const n = Number(lead[1]); used.add(n); p.className = 'q-item';
         const num = document.createElement('b'); num.className = 'qnum'; num.textContent = n;
         const blank = lead[2].match(blankPattern);
-        if (blank) p.append(num, lead[2].slice(0, blank.index), answerInput(n), lead[2].slice(blank.index + blank[0].length));
-        else p.append(num, lead[2], ' ', answerInput(n));
-      } else p.textContent = line;
+        if (blank) p.append(num, rich(lead[2].slice(0, blank.index), phrases), answerInput(n), rich(lead[2].slice(blank.index + blank[0].length), phrases));
+        else p.append(num, rich(lead[2], phrases), ' ', answerInput(n));
+      } else p.append(rich(line, phrases));
       box.append(p);
-    }
+    });
     // Numbers the parser could not place (tables, unnumbered statements) still get a box.
     const leftover = [];
     for (let n = start; n <= end; n++) if (!used.has(n)) leftover.push(n);
@@ -113,6 +137,61 @@
     currentQ = 0;
   }
 
+  // ── Answer checking ──────────────────────────────────────
+  // Lenient on form (case, spaces, "1,000", hyphens, T/F/NG shorthands), strict on content: the key's alternatives decide.
+  const TFNG = { t: 'true', true: 'true', f: 'false', false: 'false', ng: 'not given', 'not given': 'not given', y: 'yes', yes: 'yes', n: 'no', no: 'no' };
+  const norm = s => s.normalize('NFKC').toLowerCase().replace(/[‘’`]/g, "'").replace(/(\d),(?=\d{3}\b)/g, '$1').replace(/[.,;:!?"]+$/, '').replace(/\s+/g, ' ').trim();
+  function matches(answer, keys) {
+    const tf = keys.some(k => ['TRUE', 'FALSE', 'NOT GIVEN', 'YES', 'NO'].includes(k));
+    const given = tf ? (TFNG[norm(answer)] || norm(answer)) : norm(answer);
+    return keys.some(k => { const want = norm(k); return given === want || given.replace(/[-\s]/g, '') === want.replace(/[-\s]/g, ''); });
+  }
+  function results() {
+    const item = activeItem, out = {};
+    if (!item?.answers) return out;
+    for (let n = item.start; n <= item.end; n++) {
+      const keys = item.answers[n]; if (!keys) continue;
+      out[n] = { keys, ok: !!drafts.answers[n - 1].trim() && matches(drafts.answers[n - 1], keys) };
+    }
+    // "Choose TWO" pairs: either order counts, but the same letter twice only scores once.
+    for (const [a, b] of item.pairs || []) {
+      if (out[a] && out[b] && out[a].ok && out[b].ok && norm(drafts.answers[a - 1]) === norm(drafts.answers[b - 1])) out[b].ok = false;
+    }
+    return out;
+  }
+  function clearResults() {
+    document.querySelectorAll('.key-answer').forEach(el => el.remove());
+    document.querySelectorAll('.answer-input').forEach(el => el.classList.remove('is-correct', 'is-wrong'));
+    document.querySelectorAll('#qnav button').forEach(b => b.classList.remove('ok', 'bad'));
+  }
+  function showResults() {
+    clearResults();
+    const res = results(); let score = 0;
+    for (const [n, r] of Object.entries(res)) {
+      const input = document.querySelector(`.answer-input[data-q="${n}"]`);
+      const mark = document.createElement('span'); mark.className = `key-answer ${r.ok ? 'ok' : 'bad'}`;
+      mark.textContent = r.ok ? '✓' : `✗ ${r.keys.join(' / ')}`;
+      input?.classList.add(r.ok ? 'is-correct' : 'is-wrong'); input?.after(mark);
+      $('qnav').querySelector(`[data-q="${n}"]`)?.classList.add(r.ok ? 'ok' : 'bad');
+      score += r.ok;
+    }
+    const total = activeItem.end - activeItem.start + 1, keyed = Object.keys(res).length;
+    $('qcount').textContent = `得分 ${score} / ${keyed}${keyed < total ? `（${total - keyed} 題無答案鍵）` : ''}`;
+    return { score, keyed, total, res };
+  }
+  function toggleCheck() {
+    if (!activeItem) return;
+    if (!activeItem.answers) { $('status').textContent = '這份講義沒有附答案，無法自動對答案。'; return; }
+    checking = !checking;
+    $('checkBtn').textContent = checking ? '隱藏答案' : '對答案';
+    $('checkBtn').classList.toggle('active', checking);
+    if (checking) {
+      if (deadline) $('timer').click(); // pause the clock while reviewing
+      const { score, keyed } = showResults();
+      $('status').textContent = `已對答案：${score} / ${keyed}。可在「筆記」下載你的作答、畫線與註記。`;
+    } else { clearResults(); updateCount(); }
+  }
+
   function updateWordCount() {
     const words = countWords(drafts[task]), min = task === 'task1' ? 150 : 250;
     $('wordcount').textContent = `Word count: ${words}`;
@@ -126,6 +205,7 @@
     const step = d => { const qs = [...document.querySelectorAll('#qnav button[data-q]')].map(b => Number(b.dataset.q)); if (!qs.length) return; goTo(currentQ ? Math.min(qs.at(-1), Math.max(qs[0], currentQ + d)) : qs[0]); };
     $('prevQ').addEventListener('click', () => step(-1));
     $('nextQ').addEventListener('click', () => step(1));
+    $('checkBtn').addEventListener('click', toggleCheck);
   } else {
     $('editor').addEventListener('input', e => { drafts[task] = e.target.value; updateWordCount(); save(); });
     for (const id of ['task1', 'task2']) $(id).addEventListener('click', () => { task = id; render(); });
@@ -158,18 +238,20 @@
     const title = document.createElement('h1'); title.textContent = activeItem.title; view.append(title);
     const parent = kind === 'reading' ? view : document.createElement('div');
     if (kind === 'writing') { parent.className = 'prompt-box'; view.append(parent); }
-    for (const content of (kind === 'reading' ? activeItem.passage : activeItem.prompt)) {
-      if (content === activeItem.title) continue;
-      const img = figure(content); if (img) { parent.append(img); continue; }
-      if (content.includes(' | ')) { parent.append(makeTable(content, (td, text) => td.append(text))); continue; }
+    (kind === 'reading' ? activeItem.passage : activeItem.prompt).forEach((content, k) => {
+      if (content === activeItem.title) return;
+      const phrases = activeItem.fmt?.p?.[k];
+      const img = figure(content); if (img) { parent.append(img); return; }
+      if (content.includes(' | ')) { parent.append(makeTable(content, (td, text) => td.append(rich(text, phrases)))); return; }
       const p = document.createElement('p');
       // Paragraph letters/numbers (A., 1.) are what matching questions refer to, so make them stand out.
       const label = kind === 'reading' && content.match(/^([A-Z]|\d{1,2})\.\s+/);
-      if (label) { const b = document.createElement('b'); b.className = 'para-label'; b.textContent = label[1]; p.append(b, content.slice(label[0].length)); }
-      else p.textContent = content;
+      if (label) { const b = document.createElement('b'); b.className = 'para-label'; b.textContent = label[1]; p.append(b, rich(content.slice(label[0].length), phrases)); }
+      else p.append(rich(content, phrases));
       parent.append(p);
-    }
+    });
     for (const image of activeItem.images || []) { const img = document.createElement('img'); img.src = image; img.alt = '題目圖表'; img.className = 'task-figure'; parent.append(img); }
+    applyMarks();
     view.scrollTop = 0;
   }
   function setView(mode) {
@@ -185,36 +267,159 @@
   $('viewText').addEventListener('click', () => setView('text'));
   $('viewPdf').addEventListener('click', () => setView('pdf'));
 
-  // Right-click highlighting, as in the real test; the button does the same on touch screens.
-  // shortcut: highlights are not saved, persist them if students ask.
-  function highlight(target) {
-    const mark = target?.closest?.('mark') || getSelection().anchorNode?.parentElement?.closest('#textView mark');
-    const selection = getSelection();
-    if (mark && selection.isCollapsed) { mark.replaceWith(...mark.childNodes); return true; }
-    if (selection.isCollapsed || !$('textView').contains(selection.anchorNode)) return false;
-    try { selection.getRangeAt(0).surroundContents(document.createElement('mark')); } catch { $('status').textContent = '畫重點請在同一段落內選取。'; }
-    selection.removeAllRanges();
-    return true;
+  // ── Highlights and notes ─────────────────────────────────
+  // A highlight is stored as character offsets inside one block of the text (a paragraph, heading or table),
+  // so it survives re-rendering and reloads. Selections across paragraphs become one segment per block.
+  const COLORS = { yellow: '黃', green: '綠', pink: '粉紅', blue: '藍' };
+  let study = { notes: '', marks: [] };
+  const studyKey = () => activeItem && `ielts-${kind}-notes-${activeItem.id}`;
+  function loadStudy() {
+    study = { notes: '', marks: [] };
+    try { const saved = JSON.parse(localStorage.getItem(studyKey()) || 'null'); if (saved && Array.isArray(saved.marks)) study = saved; } catch {}
+    $('notesText').value = study.notes || '';
+    renderNotes();
   }
-  $('textView').addEventListener('contextmenu', e => { if (highlight(e.target)) e.preventDefault(); });
-  // mousedown keeps the selection alive until the click.
-  $('highlightBtn')?.addEventListener('mousedown', e => e.preventDefault());
-  $('highlightBtn')?.addEventListener('click', () => { if (!highlight(null)) $('status').textContent = '先在文章中選取文字，再按「畫重點」；點一下重點再按可取消。'; });
+  function saveStudy() {
+    try { localStorage.setItem(studyKey(), JSON.stringify(study)); } catch { $('status').textContent = '無法保存筆記，請先下載。'; }
+    renderNotes();
+  }
+  const blocks = () => [...$('textView').children];
+  function offsetIn(block, node, offset) { const r = document.createRange(); r.setStart(block, 0); r.setEnd(node, offset); return r.toString().length; }
+  function wrap(block, start, end, mark) {
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT); const parts = []; let pos = 0;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const len = node.data.length, a = Math.max(start, pos), b = Math.min(end, pos + len);
+      if (a < b) parts.push([node, a - pos, b - pos]);
+      pos += len;
+    }
+    for (const [node, a, b] of parts) {
+      const target = node.splitText(a); target.splitText(b - a);
+      const el = document.createElement('mark'); el.className = `hl hl-${mark.color}${mark.note ? ' has-note' : ''}`; el.dataset.id = mark.id;
+      if (mark.note) el.title = mark.note;
+      target.replaceWith(el); el.append(target);
+    }
+  }
+  function applyMarks() { for (const m of study.marks) { const block = blocks()[m.block]; if (block) wrap(block, m.start, m.end, m); } }
+  function unwrap(id) { document.querySelectorAll(`#textView mark[data-id="${id}"]`).forEach(el => { const parent = el.parentNode; el.replaceWith(...el.childNodes); parent.normalize(); }); }
+  function addMark(range, color) {
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5), created = [];
+    blocks().forEach((block, index) => {
+      if (!range.intersectsNode(block)) return;
+      const start = block.contains(range.startContainer) ? offsetIn(block, range.startContainer, range.startOffset) : 0;
+      const end = block.contains(range.endContainer) ? offsetIn(block, range.endContainer, range.endOffset) : block.textContent.length;
+      if (end > start) created.push({ id, color, block: index, start, end, text: block.textContent.slice(start, end), note: '' });
+    });
+    if (!created.length) return null;
+    study.marks.push(...created);
+    created.forEach(m => wrap(blocks()[m.block], m.start, m.end, m));
+    saveStudy();
+    return id;
+  }
+  function removeMark(id) { unwrap(id); study.marks = study.marks.filter(m => m.id !== id); saveStudy(); }
+
+  // The highlighter bar appears next to a fresh selection, or next to an existing highlight when it is clicked.
+  let barRange = null, barMark = null;
+  function hideBar() { $('hlbar').hidden = true; barRange = null; barMark = null; }
+  function showBar(rect, existing) {
+    const bar = $('hlbar'); bar.hidden = false; bar.classList.toggle('existing', !!existing);
+    const top = rect.top - bar.offsetHeight - 8 < 8 ? rect.bottom + 8 : rect.top - bar.offsetHeight - 8;
+    bar.style.top = `${top}px`; bar.style.left = `${Math.max(8, Math.min(innerWidth - bar.offsetWidth - 8, rect.left + rect.width / 2 - bar.offsetWidth / 2))}px`;
+  }
+  function onSelectEnd() {
+    setTimeout(() => {
+      const sel = getSelection();
+      if (sel.isCollapsed || !sel.rangeCount || !$('textView').contains(sel.anchorNode) || !sel.toString().trim()) return;
+      barRange = sel.getRangeAt(0).cloneRange(); barMark = null; showBar(barRange.getBoundingClientRect(), false);
+    }, 0);
+  }
+  $('textView').addEventListener('mouseup', onSelectEnd);
+  $('textView').addEventListener('touchend', onSelectEnd);
+  $('textView').addEventListener('keyup', e => { if (e.shiftKey) onSelectEnd(); });
+  $('textView').addEventListener('click', e => {
+    const mark = e.target.closest('mark.hl');
+    if (mark && getSelection().isCollapsed) { barMark = mark.dataset.id; barRange = null; showBar(mark.getBoundingClientRect(), true); }
+  });
+  // Right-click stays as the test's quick highlight (or removes one).
+  $('textView').addEventListener('contextmenu', e => {
+    const mark = e.target.closest('mark.hl');
+    if (mark) { e.preventDefault(); removeMark(mark.dataset.id); hideBar(); return; }
+    const sel = getSelection();
+    if (!sel.isCollapsed && $('textView').contains(sel.anchorNode)) { e.preventDefault(); addMark(sel.getRangeAt(0), 'yellow'); sel.removeAllRanges(); hideBar(); }
+  });
+  $('hlbar').addEventListener('mousedown', e => e.preventDefault()); // keep the selection while clicking the bar
+  $('hlbar').addEventListener('click', e => {
+    const button = e.target.closest('button'); if (!button) return;
+    const color = button.dataset.color, action = button.dataset.action;
+    if (color && barRange) { addMark(barRange, color); getSelection().removeAllRanges(); }
+    else if (color && barMark) { study.marks.filter(m => m.id === barMark).forEach(m => { m.color = color; }); unwrap(barMark); study.marks.filter(m => m.id === barMark).forEach(m => wrap(blocks()[m.block], m.start, m.end, m)); saveStudy(); }
+    else if (action === 'note') { const id = barRange ? addMark(barRange, 'yellow') : barMark; getSelection().removeAllRanges(); if (id) openNotes(id); }
+    else if (action === 'remove' && barMark) removeMark(barMark);
+    hideBar();
+  });
+  document.addEventListener('mousedown', e => { if (!e.target.closest('#hlbar') && !e.target.closest('#textView')) hideBar(); });
+  $('textView').addEventListener('scroll', hideBar);
+
+  function renderNotes() {
+    const list = $('marksList'); list.replaceChildren();
+    const groups = [...new Set(study.marks.map(m => m.id))];
+    $('notesBtn').textContent = groups.length || study.notes ? `筆記（${groups.length}）` : '筆記';
+    if (!groups.length) { const p = document.createElement('p'); p.className = 'notes-empty'; p.textContent = '在文章中選取文字即可畫重點；按「註記」可為重點寫下想法。'; list.append(p); return; }
+    for (const id of groups) {
+      const parts = study.marks.filter(m => m.id === id), first = parts[0];
+      const card = document.createElement('div'); card.className = `mark-card hl-${first.color}`; card.dataset.id = id;
+      const quote = document.createElement('blockquote'); quote.textContent = parts.map(m => m.text).join(' … ');
+      const note = document.createElement('textarea'); note.placeholder = '寫下註記…'; note.value = first.note || ''; note.rows = 2;
+      note.addEventListener('input', () => { parts.forEach(m => { m.note = note.value; }); try { localStorage.setItem(studyKey(), JSON.stringify(study)); } catch {} document.querySelectorAll(`#textView mark[data-id="${id}"]`).forEach(el => { el.classList.toggle('has-note', !!note.value); el.title = note.value; }); });
+      const tools = document.createElement('div'); tools.className = 'mark-tools';
+      const go = document.createElement('button'); go.type = 'button'; go.textContent = '定位';
+      go.addEventListener('click', () => { const el = document.querySelector(`#textView mark[data-id="${id}"]`); if (!el) return; el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1200); });
+      const del = document.createElement('button'); del.type = 'button'; del.textContent = '刪除'; del.addEventListener('click', () => removeMark(id));
+      tools.append(go, del); card.append(quote, note, tools); list.append(card);
+    }
+  }
+  function openNotes(focusId) {
+    $('notesPanel').hidden = false; $('notesBtn').classList.add('active');
+    const target = focusId && $('marksList').querySelector(`[data-id="${focusId}"] textarea`);
+    (target || $('notesText')).focus();
+  }
+  $('notesBtn').addEventListener('click', () => { if ($('notesPanel').hidden) openNotes(); else { $('notesPanel').hidden = true; $('notesBtn').classList.remove('active'); } });
+  $('notesClose').addEventListener('click', () => { $('notesPanel').hidden = true; $('notesBtn').classList.remove('active'); });
+  $('notesText').addEventListener('input', e => { study.notes = e.target.value; saveStudy(); });
+  $('downloadNotes').addEventListener('click', () => {
+    if (!activeItem) { $('status').textContent = '請先選擇題目。'; return; }
+    const lines = [`IELTS ${kind === 'reading' ? 'Reading' : 'Writing'} 筆記 — ${activeItem.title}`, `${activeItem.group} · Week ${activeItem.week} · 下載時間 ${new Date().toLocaleString('zh-TW')}`, ''];
+    const groups = [...new Set(study.marks.map(m => m.id))];
+    lines.push(`【畫重點與註記】${groups.length ? '' : '（無）'}`);
+    groups.forEach((id, k) => { const parts = study.marks.filter(m => m.id === id); lines.push(`${k + 1}. 「${parts.map(m => m.text).join(' … ')}」（${COLORS[parts[0].color] || ''}色）`); if (parts[0].note) lines.push(`   註記：${parts[0].note}`); });
+    lines.push('', '【我的筆記】', study.notes?.trim() || '（無）');
+    if (kind === 'reading') {
+      const res = results(); lines.push('', '【我的作答】');
+      for (let n = activeItem.start; n <= activeItem.end; n++) {
+        const r = res[n], given = drafts.answers[n - 1].trim() || '（未作答）';
+        lines.push(`${n}. ${given}${r ? (r.ok ? '  ✓' : `  ✗  正解：${r.keys.join(' / ')}`) : ''}`);
+      }
+      if (activeItem.answers) { const ok = Object.values(res).filter(r => r.ok).length; lines.push(`得分：${ok} / ${Object.keys(res).length}`); }
+    } else lines.push('', '【我的作文】', drafts[task] || '（未作答）', '', `Word count: ${countWords(drafts[task])}`);
+    download(`IELTS-${kind}-${activeItem.id}-筆記.txt`, `﻿${lines.join('\n')}\n`, 'text/plain;charset=utf-8');
+  });
 
   function setBanner(title, hint) { $('partTitle').textContent = title; $('partHint').textContent = hint; }
   function loadText(item) {
-    activeItem = item;
+    activeItem = item; checking = false; hideBar();
     if (kind === 'reading') {
+      $('checkBtn').textContent = '對答案'; $('checkBtn').classList.remove('active');
+      $('checkBtn').disabled = !item.answers; $('checkBtn').title = item.answers ? '核對答案（可再按一次隱藏）' : '這份講義沒有附答案';
       buildQuestions(item);
       const count = item.end - item.start + 1;
       setLimit(Math.ceil(count / 14) * 20);
-      setBanner(`Questions ${item.start}–${item.end}`, `閱讀文章並回答第 ${item.start}–${item.end} 題。建議時間 ${limit / 60} 分鐘。選取文字後按右鍵或「畫重點」可畫重點。`);
+      setBanner(`Questions ${item.start}–${item.end}`, `文章約 ${passageWords(item)} 字 · 建議 ${limit / 60} 分鐘 · 選取文字即可畫重點`);
     } else {
       task = item.task === 1 ? 'task1' : 'task2';
       document.querySelector('.tabs').hidden = true;
       setLimit(item.task === 1 ? 20 : 40);
       setBanner(`Part ${item.task}`, `建議時間 ${limit / 60} 分鐘，至少寫 ${item.task === 1 ? 150 : 250} 字。`);
     }
+    loadStudy();
     setView('text');
   }
 
@@ -263,7 +468,7 @@
       const section = document.createElement('section'); const h = document.createElement('h3'); h.textContent = group; section.append(h);
       for (const item of items) {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'lib-item'; b.classList.toggle('active', item === activeItem);
-        const meta = document.createElement('small'); meta.textContent = `Week ${item.week} · ${kind === 'reading' ? `Q${item.start}–${item.end}` : `Task ${item.task}`}`;
+        const meta = document.createElement('small'); meta.textContent = `Week ${item.week} · ${kind === 'reading' ? `Q${item.start}–${item.end} · ${passageWords(item)} 字` : `Task ${item.task}`}`;
         const name = document.createElement('span'); name.textContent = kind === 'reading' ? item.title : item.label.replace(/^Task \d · /, '');
         const done = progress(item); const badge = document.createElement('em'); badge.textContent = done; badge.hidden = !done;
         b.append(meta, name, badge);
@@ -283,15 +488,13 @@
     const linked = decodeURIComponent(location.hash.slice(1));
     if (linked !== activeItem?.id && materials.some(item => item.id === linked)) { $('material').value = linked; $('material').dispatchEvent(new Event('change')); }
   }
-  openFromHash();
-  addEventListener('hashchange', openFromHash);
   $('pdf').addEventListener('change', e => {
     const file = e.target.files[0]; if (!file) return;
     if (!file.name.toLowerCase().endsWith('.pdf')) { alert('請選擇 PDF 檔案。'); return; }
     if (!canSwitch()) { e.target.value = ''; return; }
     if (pdfUrl) URL.revokeObjectURL(pdfUrl);
-    pdfUrl = URL.createObjectURL(file); showPdf(pdfUrl, file.name); $('material').value = ''; activeItem = null;
-    if (kind === 'reading') buildQuestions(null); else document.querySelector('.tabs').hidden = false;
+    pdfUrl = URL.createObjectURL(file); showPdf(pdfUrl, file.name); $('material').value = ''; activeItem = null; checking = false;
+    if (kind === 'reading') { buildQuestions(null); $('checkBtn').disabled = true; } else document.querySelector('.tabs').hidden = false;
     setLimit(60); setBanner('自選 PDF', '依講義題號作答。');
     setView('pdf');
     setMaterialKey(`ielts-${kind}-${file.name}-${file.size}-${file.lastModified}`); e.target.value = '';
@@ -333,4 +536,6 @@
     } catch { alert('備份檔無效，請選擇從本網站下載的 JSON 檔。'); }
     e.target.value = '';
   });
+  openFromHash();
+  addEventListener('hashchange', openFromHash);
 })();
