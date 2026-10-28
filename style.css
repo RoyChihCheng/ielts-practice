@@ -82,12 +82,40 @@ iframe{width:100%;flex:1;border:1px solid var(--line);min-height:300px}
 
 /* ── Questions and answers (exam surface) ────────────── */
 .work{overflow:auto;padding:20px 24px;background:#fbfbfa;font:max(18px,calc(var(--font) * .82))/1.6 var(--exam)}
-.question-text h3{font-size:1em;margin:1.5em 0 .5em;padding:.25em .55em;background:#eef1f4;border-left:4px solid var(--navy)}
-.question-text h3:first-child{margin-top:0}
 .placeholder{margin:2em 0;color:var(--muted);font:16px/1.7 var(--ui);text-align:center}
-.question-text p{margin:0 0 .7em;white-space:pre-wrap}
-.q-item{padding:.3em 0}
-.qnum{display:inline-block;min-width:1.9em;margin-right:.45em;padding:0 .3em;border:1.5px solid var(--ink);border-radius:4px;text-align:center;font-weight:700;line-height:1.4}
+/* Question layout follows the Cambridge books: italic headings and instructions, a two-column TRUE/FALSE/NOT GIVEN key,
+   bold numbers with a hanging indent, boxed option lists, notes and summaries, and flow-charts as boxed steps. */
+.question-text{color:#111}
+.question-text p{margin:0 0 .6em;white-space:pre-wrap}
+.q-group{margin:0 0 1.8em}
+.q-heading{font-style:italic;margin:0 0 .7em!important}
+.q-instr{font-style:italic}.q-instr.upright{font-style:normal}
+.q-legend{display:grid;grid-template-columns:max-content 1fr;gap:.05em 1.1em;margin:.2em 0 1em 1.8em;font-size:.95em}
+.q-item{display:grid;grid-template-columns:2.1em minmax(0,1fr);align-items:baseline;margin:.5em 0}
+.q-item>.qnum{font-weight:700}
+.q-text{white-space:pre-wrap}
+.q-stem{margin:.5em 0}
+.mcq-opts{margin:.35em 0 .1em}
+.opt{display:grid;grid-template-columns:1.8em minmax(0,1fr);align-items:baseline;margin:.1em 0}
+.opt-key{font-weight:700}
+.opt-box{width:fit-content;max-width:100%;border:1px solid #444;padding:.5em 1em;margin:.7em 0 1.1em 1.8em}
+.opt-box.cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(11em,1fr));gap:.15em 1.4em;width:auto}
+.q-stem .mcq-opts{margin-left:1.8em}
+.opt-box.cols .opt-title{grid-column:1/-1}
+.opt-title{font-weight:700;text-align:center;margin:0 0 .35em!important}
+.q-box{border:1px solid #444;padding:.7em 1.1em;margin:.7em 0 1.1em}
+.box-title{font-weight:700;text-align:center;font-size:1.08em;margin:0 0 .6em!important}
+.box-sub{font-weight:700;margin:.7em 0 .25em!important}
+.box-bullet{position:relative;padding-left:1.5em;margin:.25em 0!important}
+.box-bullet::before{content:'•';position:absolute;left:.35em}
+.box-line{margin:.35em 0!important}
+.table-title{font-weight:700;text-align:center;margin:.4em 0!important}
+.q-flow{display:flex;flex-direction:column;align-items:center;margin:.7em 0 1.1em}
+.q-flow .box-title{margin-bottom:.4em!important}
+.flow-step{border:1px solid #444;padding:.4em 1em;width:min(100%,30em);text-align:center}
+.flow-arrow{font-size:1.25em;line-height:1.3}
+.gapnum{font-weight:700;margin:0 .1em 0 .15em}
+.answers .qnum{display:inline-block;min-width:1.9em;margin-right:.45em;padding:0 .3em;border:1.5px solid var(--ink);border-radius:4px;text-align:center;font-weight:700;line-height:1.4}
 .answer-input{width:9em;max-width:100%;margin:0 .2em;padding:.1em .4em;border:1.5px solid #6b7782;border-radius:4px;background:#fff;font-size:.95em;line-height:1.4;vertical-align:baseline;transition:border-color .12s,box-shadow .12s}
 .answer-input::placeholder{color:#9aa4ad;font-weight:700;text-align:center}
 .answer-input:focus{outline:none;border-color:var(--focus);box-shadow:0 0 0 3px #1d64d840}
@@ -242,3 +270,9 @@ mark.hl.flash{box-shadow:0 0 0 4px #1d64d866}
 .qnav button.ok{background:var(--ok);border-color:var(--ok);color:#fff}
 .qnav button.bad{background:#c62828;border-color:#c62828;color:#fff}
 @media(max-width:900px){.notes-panel{position:fixed;top:auto;left:8px;right:8px;bottom:64px;width:auto;max-height:70dvh}.qbar>.check-btn{padding:8px 12px}}
+/* Gap answers look like the books' dotted lines; statement answers keep a small box. */
+.answer-input.gap{width:7.5em;border:0;border-bottom:2px dotted #333;border-radius:0;background:transparent;padding:0 .2em}
+.answer-input.gap:focus{background:#eef4ff;box-shadow:none;border-bottom-color:var(--focus)}
+.answer-input.gap.is-correct{background:#eef8f1;border-bottom-color:var(--ok)}
+.answer-input.gap.is-wrong{background:#fdeeee;border-bottom-color:#c62828}
+.q-table td.span-head{text-align:center;font-weight:700;background:#eef1f4}

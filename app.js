@@ -39,7 +39,13 @@
   }
   function makeTable(line, fill) {
     const table = document.createElement('table'); table.className = 'q-table';
-    for (const row of line.split('\n')) { const tr = table.insertRow(); for (const cell of row.split(' | ')) fill(tr.insertCell(), cell); }
+    // Line breaks inside a cell arrive as U+2028 (rows are split on "\n"); cells use pre-wrap, so "\n" shows as a break.
+    for (const row of line.split('\n')) { const tr = table.insertRow(); for (const cell of row.split(' | ')) fill(tr.insertCell(), cell.replace(/\u2028/g, '\n')); }
+    // A row with only its first cell filled ("Māori cloaks") is a title spanning the table, as in the books.
+    for (const tr of [...table.rows]) {
+      const cells = [...tr.cells];
+      if (cells.length > 1 && cells[0].textContent.trim() && cells.slice(1).every(c => !c.textContent.trim())) { cells.slice(1).forEach(c => c.remove()); cells[0].colSpan = cells.length; cells[0].className = 'span-head'; }
+    }
     const head = table.rows[0];
     table.classList.toggle('has-head', table.rows.length > 2 && !head.querySelector('input') && !/^(?:[A-Z]|[ivx]+)$/.test(head.cells[0].textContent.trim()));
     return table;
@@ -67,6 +73,7 @@
   // Reading: answer boxes are placed inline in the question text, like the computer-delivered test.
   const gapPattern = /(\d{1,2})\.?\s*(?:[.…]{3,}|_{3,})/g;
   const blankPattern = /[.…]{4,}|_{3,}/;
+  const numberedGap = /(\d{1,2})\.?\s*(?:[.…]{3,}|_{3,})/;
   let currentQ = 0, checking = false;
   function updateCount() {
     const buttons = [...document.querySelectorAll('#qnav button[data-q]')];
@@ -89,39 +96,166 @@
     const input = document.querySelector(`.answer-input[data-q="${n}"]`); if (!input) return;
     input.scrollIntoView({ block: 'center', behavior: 'smooth' }); input.focus({ preventScroll: true });
   }
+  // ── Question layout, modelled on the Cambridge books (Cambridge IELTS 20, Trainer 2, Official Guide) ──
+  // Headings in italics; instructions in italics with key words in bold; TRUE/FALSE/NOT GIVEN as a two-column key;
+  // bold question numbers with a hanging indent; option lists, notes and summaries in boxes; flow-charts as boxed steps.
+  const el = (tag, cls, ...kids) => { const node = document.createElement(tag); if (cls) node.className = cls; node.append(...kids); return node; };
+  const INSTRUCTION = /^(?:Do the following|In boxes|Write\b|Choose\b|Complete\b|Reading Passage \d+ has|The (?:text|passage|reading passage)\b.*\bhas\b|Which (?:paragraph|section)|Look at|Match\b|Answer the|Label\b|Classify|NB\b|N\.B\.|You may use|Using NO MORE|Use NO MORE)/i;
+  const UPRIGHT = /^(?:Do the following|Which (?:paragraph|section)|Reading Passage \d+ has|The (?:text|passage|reading passage)\b.*\bhas\b|Which (?:TWO|THREE)\b)/i;
+  const LEGEND = /^(?:•\s*)?(TRUE|FALSE|YES|NO|NOT GIVEN)\s*(if\b.*)$/;
+  // Capitalised phrases, letter ranges and "A, B, C or D" are set in bold in the books' instructions.
+  const instructionBold = text => [...new Set([
+    ...[...text.matchAll(/\b[A-Z][A-Z/]*(?:\s+[A-Z][A-Z/]*)*\b/g)].map(m => m[0]).filter(s => /[A-Z]{2}/.test(s)),
+    ...[...text.matchAll(/\b(?:[A-I]|[ivx]{1,4})\s*[–-]\s*(?:[A-I]|[ivx]{1,4})\b/g)].map(m => m[0]),
+    ...[...text.matchAll(/\b[A-I](?:,\s*[A-I])*,?\s+or\s+[A-I]\b/g)].map(m => m[0]),
+  ])].map(s => ['b', s]);
+  function groupKind(instructions) {
+    if (/NOT GIVEN/.test(instructions)) return 'judge';
+    if (/flow-?chart/i.test(instructions)) return 'flow';
+    if (/complete the (?:notes|summary)/i.test(instructions) && !/list of words|correct letter/i.test(instructions)) return 'box';
+    if (/complete the table/i.test(instructions)) return 'table';
+    if (/correct letter|correct number|list of|choose (?:two|three)|[A-I]\s*[–-]\s*[A-I]|headings/i.test(instructions)) return 'choice';
+    return 'plain';
+  }
   function buildQuestions(item) {
     const box = $('questionText'), rest = $('answers'), nav = $('qnav');
     box.replaceChildren(); rest.replaceChildren(); nav.replaceChildren();
     const start = item ? item.start : 1, end = item ? item.end : 40, used = new Set();
     const free = n => n >= start && n <= end && !used.has(n);
-    // Replaces numbered gaps ("7 ......") in text with answer boxes; returns false if none were placed.
-    const fillGaps = (el, text, phrases) => {
+    const gapInput = n => { const input = answerInput(n); input.classList.add('gap'); input.placeholder = ''; return [el('b', 'gapnum', String(n)), input]; };
+    // Replaces numbered gaps ("7 ......") with the bold number and an answer field; returns false if none were placed.
+    const fillGaps = (target, text, phrases) => {
       let last = 0;
       for (const m of text.matchAll(gapPattern)) {
         const n = Number(m[1]); if (!free(n)) continue;
-        el.append(rich(text.slice(last, m.index), phrases), answerInput(n)); used.add(n); last = m.index + m[0].length;
+        target.append(rich(text.slice(last, m.index), phrases), ...gapInput(n)); used.add(n); last = m.index + m[0].length;
       }
-      el.append(rich(text.slice(last), phrases));
+      target.append(rich(text.slice(last), phrases));
       return last > 0;
     };
-    (item ? item.questions : []).forEach((line, k) => {
-      const phrases = item.fmt?.q?.[k];
-      if (/^Questions?\s+\d/i.test(line)) { const h = document.createElement('h3'); h.textContent = line; box.append(h); return; }
-      const img = figure(line); if (img) { box.append(img); return; }
-      if (line.includes(' | ')) { box.append(makeTable(line, (td, cell) => fillGaps(td, cell, phrases))); return; }
-      const p = document.createElement('p');
-      if (fillGaps(p, line, phrases)) { box.append(p); return; }
-      p.replaceChildren();
-      const lead = line.match(/^(\d{1,2})\.?\s+(\S[\s\S]*)$/);
-      if (lead && free(Number(lead[1]))) {
-        const n = Number(lead[1]); used.add(n); p.className = 'q-item';
-        const num = document.createElement('b'); num.className = 'qnum'; num.textContent = n;
-        const blank = lead[2].match(blankPattern);
-        if (blank) p.append(num, rich(lead[2].slice(0, blank.index), phrases), answerInput(n), rich(lead[2].slice(blank.index + blank[0].length), phrases));
-        else p.append(num, rich(lead[2], phrases), ' ', answerInput(n));
-      } else p.append(rich(line, phrases));
-      box.append(p);
+    // A numbered line: bold number in the margin, the statement, and its answer field (in its blank if it has one).
+    const questionLine = (n, text, phrases) => {
+      used.add(n);
+      const body = el('div', 'q-text'), blank = text.match(blankPattern);
+      if (blank) body.append(rich(text.slice(0, blank.index), phrases), answerInput(n), rich(text.slice(blank.index + blank[0].length), phrases));
+      else body.append(rich(text, phrases), ' ', answerInput(n));
+      return el('div', 'q-item', el('b', 'qnum', String(n)), body);
+    };
+    // Options never take the handout's bold: the books print them plain, and a teacher's bold can give the answer away.
+    const option = (letter, text, phrases) => el('div', 'opt', el('b', 'opt-key', letter), el('span', '', rich(text, (phrases || []).filter(p => p[0] === 'i'))));
+    const lines = item ? item.questions : [];
+    const headings = lines.map((l, k) => /^Questions?\s+\d/i.test(l) ? k : -1).filter(k => k >= 0);
+    if (lines.length && headings[0] !== 0) headings.unshift(0);
+    headings.forEach((from, g) => {
+      const to = g + 1 < headings.length ? headings[g + 1] : lines.length;
+      const group = el('section', 'q-group'); box.append(group);
+      let k = from;
+      const head = lines[k].match(/^(Questions?\s+\d+(?:\s*(?:[–-]|and|&)\s*\d+)?)\s*[:.]?\s*(.*)$/i);
+      const pending = [];
+      if (head) { group.append(el('p', 'q-heading', head[1])); if (head[2]) pending.push([head[2], -1]); k++; }
+      while (k < to && INSTRUCTION.test(lines[k]) && !LEGEND.test(lines[k])) { pending.push([lines[k], k]); k++; }
+      const instructions = pending.map(p => p[0]).join(' ');
+      const kind = groupKind(instructions);
+      const range = head && head[1].match(/(\d+)\D+(\d+)$/);
+      for (const [text, idx] of pending) {
+        // Handouts often run several instructions together; the books print one per line.
+        for (const part of text.split(/(?<=[.?])\s*(?=(?:Choose|Write|In boxes|Match|Complete|NB)\b)/)) {
+          group.append(el('p', UPRIGHT.test(part) ? 'q-instr upright' : 'q-instr', rich(part, [...instructionBold(part), ...(item.fmt?.q?.[idx] || []).filter(p => p[0] !== 'b')])));
+        }
+      }
+      let legend = null, options = null, mcq = null, content = null, title = null;
+      const optionsAllowed = kind === 'choice' || /list of words|correct letter/i.test(instructions);
+      // Only multiple-choice groups hang their A–D options under each question; matching groups keep one shared list.
+      const isMCQ = /choose the correct (?:letter|answer)|choose (?:two|three) letters/i.test(instructions);
+      const contentBox = () => {
+        if (!content) { content = el('div', kind === 'flow' ? 'q-flow' : 'q-box'); group.append(content); if (title) { content.append(el('p', 'box-title', title)); title = null; } }
+        return content;
+      };
+      for (; k < to; k++) {
+        const line = lines[k], phrases = item.fmt?.q?.[k];
+        const img = figure(line); if (img) { group.append(img); mcq = options = null; continue; }
+        const legendLine = line.match(LEGEND);
+        if (legendLine) { if (!legend) { legend = el('div', 'q-legend'); group.append(legend); } legend.append(el('b', '', el('i', '', legendLine[1])), el('i', '', legendLine[2])); continue; }
+        if (line.includes(' | ')) {
+          const rows = line.split('\n').map(r => r.split(' | '));
+          // A two-column table whose first column is A, B, C… is a list of options, set as a box like the books.
+          const named = /^List of\b/i.test(rows[0][0]) && rows[0].slice(1).every(c => !c.trim()) ? rows.shift()[0] : null;
+          if (rows.length && rows.every(r => r.filter(c => c.trim()).length === 2 && /^(?:[A-I]|[ivx]{1,5})$/.test(r[0].trim()))) {
+            const list = el('div', 'opt-box'); if (named) list.append(el('p', 'opt-title', named));
+            rows.forEach(r => { const [key, text] = r.filter(c => c.trim()); list.append(option(key.trim(), text, phrases)); }); group.append(list); mcq = null; continue;
+          }
+          const cells = rows.flat().filter(c => c.trim());
+          if (cells.length >= 4 && cells.every(c => /^[A-I]\s+\S/.test(c.trim()))) {
+            const list = el('div', 'opt-box'); cells.forEach(c => { const m = c.trim().match(/^([A-I])\s+(.*)$/); list.append(option(m[1], m[2], phrases)); }); group.append(list); mcq = null; continue;
+          }
+          if (named) rows.unshift([named]);
+          group.append(makeTable(line, (td, cell) => fillGaps(td, cell, phrases))); mcq = options = null; continue;
+        }
+        if (INSTRUCTION.test(line) && !/\.{3,}|_{3,}/.test(line)) { group.append(el('p', UPRIGHT.test(line) ? 'q-instr upright' : 'q-instr', rich(line, instructionBold(line)))); continue; }
+        const opt = optionsAllowed && line.match(/^(?:•\s*)?([A-I]|[ivx]{1,5})\.?\s+(\S.*)$/);
+        if (opt && !/[.…]{4,}|_{3,}/.test(line)) {
+          // Handouts sometimes run two options together ("C … altered. D The participants …"); split them again.
+          const parts = []; let letter = opt[1], text = opt[2];
+          for (;;) {
+            const next = String.fromCharCode(letter.charCodeAt(0) + 1);
+            const at = /^[A-H]$/.test(letter) ? text.search(new RegExp(`[.?]\\s+${next}\\s+(?=[A-Z])`)) : -1;
+            if (at < 0) { parts.push([letter, text]); break; }
+            parts.push([letter, text.slice(0, at + 1)]); text = text.slice(at + 1).trim().slice(2); letter = next;
+          }
+          if (!mcq && !options) {
+            options = el('div', 'opt-box'); group.append(options);
+            if (title) { options.append(el('p', 'opt-title', title)); title = null; }
+          }
+          for (const [key, value] of parts) (mcq || options).append(option(key, value, phrases));
+          continue;
+        }
+        options = null;
+        if (/^List of\b/i.test(line)) { title = line; continue; }
+        const lead = line.match(/^(?:•\s*)?(\d{1,2})\.?\s+(\S[\s\S]*)$/);
+        if (lead && free(Number(lead[1])) && !numberedGap.test(line)) {
+          const q = questionLine(Number(lead[1]), lead[2], phrases);
+          if (isMCQ) { mcq = el('div', 'mcq-opts'); q.querySelector('.q-text').append(mcq); }
+          (content && kind !== 'plain' ? content : group).append(q); continue;
+        }
+        mcq = null;
+        // "Which TWO …" stems of choose-two items take the option list that follows.
+        if (isMCQ && /\?$|\bTWO\b|\bTHREE\b/.test(line) && !/[.…]{4,}/.test(line)) {
+          const stem = el('div', 'q-stem', rich(line, phrases));
+          if (range) for (let n = Number(range[1]); n <= Number(range[2]); n++) if (free(n)) { used.add(n); stem.append(' ', answerInput(n)); }
+          mcq = el('div', 'mcq-opts'); stem.append(mcq); group.append(stem); continue;
+        }
+        if (kind === 'flow') {
+          let text = line;
+          const lead = (phrases || []).find(p => p[0].includes('b') && line.startsWith(p[1]) && line.length > p[1].length);
+          if (lead && !content) { contentBox().append(el('p', 'box-title', lead[1])); text = line.slice(lead[1].length).trim(); }
+          for (const step of text.split(/\s*[⬇↓]\s*/).filter(Boolean)) {
+            const box2 = contentBox();
+            if (box2.children.length && !box2.lastChild.classList.contains('box-title')) box2.append(el('div', 'flow-arrow', '↓'));
+            const s = el('div', 'flow-step'); fillGaps(s, step, phrases); box2.append(s);
+          }
+          continue;
+        }
+        if (kind === 'box' || kind === 'table') {
+          const hasGap = /[.…]{3,}|_{3,}/.test(line);
+          if (kind === 'table') { if (!hasGap && line.length < 80) { group.append(el('p', 'table-title', rich(line, phrases))); continue; } }
+          else {
+            const target = contentBox();
+            if (!hasGap && line.length < 80 && !/^•/.test(line) && !/[.]$/.test(line)) {
+              target.append(el('p', target.children.length ? 'box-sub' : 'box-title', rich(line, phrases))); continue;
+            }
+            const p = el('p', /^•/.test(line) ? 'box-bullet' : 'box-line'); fillGaps(p, line.replace(/^•\s*/, ''), phrases); target.append(p); continue;
+          }
+        }
+        // A short line right before a gapped paragraph is that summary's title, centred in bold like the books.
+        if (line.length < 80 && !/[.?:,]$/.test(line) && !blankPattern.test(line) && blankPattern.test(lines[k + 1] || '')) { group.append(el('p', 'table-title', rich(line, phrases))); continue; }
+        const p = el('p', 'q-line');
+        if (!fillGaps(p, line, phrases)) { p.replaceChildren(rich(line, phrases)); }
+        group.append(p);
+      }
+      if (title) group.append(el('p', 'q-line', title));
     });
+    // Long lists of short options (summary word banks) are printed in columns in the books.
+    box.querySelectorAll('.opt-box').forEach(list => { const opts = [...list.querySelectorAll('.opt')]; if (opts.length >= 6 && opts.every(o => o.textContent.length <= 30)) list.classList.add('cols'); });
     // Numbers the parser could not place (tables, unnumbered statements) still get a box.
     const leftover = [];
     for (let n = start; n <= end; n++) if (!used.has(n)) leftover.push(n);
