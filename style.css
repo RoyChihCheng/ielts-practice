@@ -99,7 +99,7 @@ iframe{width:100%;flex:1;border:1px solid var(--line);min-height:300px}
 .opt{display:grid;grid-template-columns:1.8em minmax(0,1fr);align-items:baseline;margin:.1em 0}
 .opt-key{font-weight:700}
 .opt-box{width:fit-content;max-width:100%;border:1px solid #444;padding:.5em 1em;margin:.7em 0 1.1em 1.8em}
-.opt-box.cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(11em,1fr));gap:.15em 1.4em;width:auto}
+.opt-box.cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5em,1fr));gap:.15em 1.4em;width:auto}
 .q-stem .mcq-opts{margin-left:1.8em}
 .opt-box.cols .opt-title{grid-column:1/-1}
 .opt-title{font-weight:700;text-align:center;margin:0 0 .35em!important}
@@ -276,3 +276,11 @@ mark.hl.flash{box-shadow:0 0 0 4px #1d64d866}
 .answer-input.gap.is-correct{background:#eef8f1;border-bottom-color:var(--ok)}
 .answer-input.gap.is-wrong{background:#fdeeee;border-bottom-color:#c62828}
 .q-table td.span-head{text-align:center;font-weight:700;background:#eef1f4}
+/* The books open each passage with its label and time guidance. */
+.text-view .passage-label{font-weight:700;letter-spacing:.04em;margin:0 0 .4em;font-size:.9em}
+.text-view .passage-intro{font-size:.85em;margin:0 0 1.4em;color:#222}
+.text-view .subtitle{font-style:italic}
+/* Answer boxes for diagram labels sit under the diagram, in their own group. */
+.answer-row{display:flex;flex-wrap:wrap;gap:.4em 1.4em;margin:.6em 0}
+.answer-row .answer{margin:0}
+.answer-row .qnum{display:inline-block;min-width:1.9em;margin-right:.35em;font-weight:700}

@@ -100,7 +100,7 @@
   // Headings in italics; instructions in italics with key words in bold; TRUE/FALSE/NOT GIVEN as a two-column key;
   // bold question numbers with a hanging indent; option lists, notes and summaries in boxes; flow-charts as boxed steps.
   const el = (tag, cls, ...kids) => { const node = document.createElement(tag); if (cls) node.className = cls; node.append(...kids); return node; };
-  const INSTRUCTION = /^(?:Do the following|In boxes|Write\b|Choose\b|Complete\b|Reading Passage \d+ has|The (?:text|passage|reading passage)\b.*\bhas\b|Which (?:paragraph|section)|Look at|Match\b|Answer the|Label\b|Classify|NB\b|N\.B\.|You may use|Using NO MORE|Use NO MORE)/i;
+  const INSTRUCTION = /^(?:For Questions|Do the following|In boxes|Write\b|Choose\b|Complete\b|Reading Passage \d+ has|The (?:text|passage|reading passage)\b.*\bhas\b|Which (?:paragraph|section)|Look at|Match\b|Answer the|Label\b|Classify|NB\b|N\.B\.|You may use|Using NO MORE|Use NO MORE)/i;
   const UPRIGHT = /^(?:Do the following|Which (?:paragraph|section)|Reading Passage \d+ has|The (?:text|passage|reading passage)\b.*\bhas\b|Which (?:TWO|THREE)\b)/i;
   const LEGEND = /^(?:•\s*)?(TRUE|FALSE|YES|NO|NOT GIVEN)\s*(if\b.*)$/;
   // Capitalised phrases, letter ranges and "A, B, C or D" are set in bold in the books' instructions.
@@ -109,6 +109,24 @@
     ...[...text.matchAll(/\b(?:[A-I]|[ivx]{1,4})\s*[–-]\s*(?:[A-I]|[ivx]{1,4})\b/g)].map(m => m[0]),
     ...[...text.matchAll(/\b[A-I](?:,\s*[A-I])*,?\s+or\s+[A-I]\b/g)].map(m => m[0]),
   ])].map(s => ['b', s]);
+  function splitOptions(line) {
+    // A whole TRUE/FALSE/NOT GIVEN key, or two numbered statements ("20 After … 21 There were …"), typed on one line.
+    if (/^(?:•\s*)?(?:TRUE|YES)\s+if\b/.test(line)) return line.split(/\s+(?=(?:FALSE|NO|NOT GIVEN)\s+if\b)/);
+    const first = line.match(/^(\d{1,2})\.?\s+\S/);
+    if (first) {
+      const at = line.search(new RegExp(`\\s${Number(first[1]) + 1}\\.?\\s+[A-Z]`));
+      if (at > 0) return [line.slice(0, at), ...splitOptions(line.slice(at + 1))];
+    }
+    if (/[.…]{4,}|_{3,}/.test(line) || line.includes(' | ')) return [line];
+    const named = line.match(/^(List of [A-Za-z ]+?)\s+(?=(?:[A-I]|i)\s+[A-Z])/);
+    const rest = named ? line.slice(named[0].length) : line, out = named ? [named[1]] : [];
+    // Lettered word lists: three or more "X word" items, each letter once; the books list them in letter order.
+    const letters = rest.split(/\s+(?=[A-I]\s+\S)/);
+    if (letters.length >= 3 && letters.every(s => /^[A-I]\s/.test(s)) && new Set(letters.map(s => s[0])).size === letters.length) return [...out, ...letters.sort()];
+    const romans = rest.split(/\s+(?=(?:ii|iii|iv|v|vi|vii|viii|ix|x|xi|xii)\s+[A-Z])/);
+    if (romans.length >= 2 && /^[ivx]{1,4}\s+[A-Z]/.test(rest)) return [...out, ...romans];
+    return named ? [...out, rest] : [line];
+  }
   function groupKind(instructions) {
     if (/NOT GIVEN/.test(instructions)) return 'judge';
     if (/flow-?chart/i.test(instructions)) return 'flow';
@@ -143,7 +161,12 @@
     };
     // Options never take the handout's bold: the books print them plain, and a teacher's bold can give the answer away.
     const option = (letter, text, phrases) => el('div', 'opt', el('b', 'opt-key', letter), el('span', '', rich(text, (phrases || []).filter(p => p[0] === 'i'))));
-    const lines = item ? item.questions : [];
+    // Handout paragraphs with soft line breaks hold several lines, and options are sometimes typed on one line
+    // ("List of people A … B …", "A safe B competitive …", "v … vi …"); give each its own line. src maps back to item.fmt.
+    const lines = [], src = [];
+    (item ? item.questions : []).forEach((raw, k) => {
+      for (const piece of raw.includes(' | ') ? [raw] : raw.split('\n')) for (const part of splitOptions(piece)) { lines.push(part); src.push(k); }
+    });
     const headings = lines.map((l, k) => /^Questions?\s+\d/i.test(l) ? k : -1).filter(k => k >= 0);
     if (lines.length && headings[0] !== 0) headings.unshift(0);
     headings.forEach((from, g) => {
@@ -153,26 +176,37 @@
       const head = lines[k].match(/^(Questions?\s+\d+(?:\s*(?:[–-]|and|&)\s*\d+)?)\s*[:.]?\s*(.*)$/i);
       const pending = [];
       if (head) { group.append(el('p', 'q-heading', head[1])); if (head[2]) pending.push([head[2], -1]); k++; }
-      while (k < to && INSTRUCTION.test(lines[k]) && !LEGEND.test(lines[k])) { pending.push([lines[k], k]); k++; }
-      const instructions = pending.map(p => p[0]).join(' ');
+      while (k < to && INSTRUCTION.test(lines[k]) && !LEGEND.test(lines[k])) { pending.push([lines[k], src[k]]); k++; }
+      // Classify from every instruction in the group: some groups open with a lead-in sentence before them.
+      const instructions = [...pending.map(p => p[0]), ...lines.slice(k, to).filter(l => INSTRUCTION.test(l))].join(' ');
       const kind = groupKind(instructions);
-      const range = head && head[1].match(/(\d+)\D+(\d+)$/);
-      for (const [text, idx] of pending) {
-        // Handouts often run several instructions together; the books print one per line.
-        for (const part of text.split(/(?<=[.?])\s*(?=(?:Choose|Write|In boxes|Match|Complete|NB)\b)/)) {
-          group.append(el('p', UPRIGHT.test(part) ? 'q-instr upright' : 'q-instr', rich(part, [...instructionBold(part), ...(item.fmt?.q?.[idx] || []).filter(p => p[0] !== 'b')])));
-        }
-      }
+      const range = head && (head[1].match(/(\d+)\D+(\d+)$/) || head[1].match(/((\d+))$/));
+      if (range) group.dataset.range = `${range[1]}-${range[2]}`;
       let legend = null, options = null, mcq = null, content = null, title = null;
       const optionsAllowed = kind === 'choice' || /list of words|correct letter/i.test(instructions);
       // Only multiple-choice groups hang their A–D options under each question; matching groups keep one shared list.
-      const isMCQ = /choose the correct (?:letter|answer)|choose (?:two|three) letters/i.test(instructions);
+      const isMCQ = /choose the correct (?:letter|answer)|choose (?:two|three) (?:letters|answers)/i.test(instructions);
+      // A "Which TWO …" question carries the answer boxes for its own numbers ("37–38 Which TWO …") or the group's range.
+      const stemFor = (text, phrases) => {
+        const own = text.match(/^(\d{1,2})\s*[–-]\s*(\d{1,2})\s+(.*)$/);
+        const stem = el('div', 'q-stem', rich(own ? own[3] : text, phrases));
+        const [a, b] = own ? [own[1], own[2]] : range ? [range[1], range[2]] : [1, 0];
+        for (let n = Number(a); n <= Number(b); n++) if (free(n)) { used.add(n); stem.append(' ', answerInput(n)); }
+        mcq = el('div', 'mcq-opts'); stem.append(mcq); group.append(stem);
+      };
+      for (const [text, idx] of pending) {
+        // Handouts often run several instructions together; the books print one per line.
+        for (const part of text.split(/(?<=[.?])\s*(?=(?:Choose|Write|In boxes|Match|Complete|NB|Which)\b)/)) {
+          if (isMCQ && /^Which (?:TWO|THREE)\b/.test(part)) { stemFor(part, null); continue; }
+          group.append(el('p', UPRIGHT.test(part) ? 'q-instr upright' : 'q-instr', rich(part, [...instructionBold(part), ...(item.fmt?.q?.[idx] || []).filter(p => p[0] !== 'b')])));
+        }
+      }
       const contentBox = () => {
         if (!content) { content = el('div', kind === 'flow' ? 'q-flow' : 'q-box'); group.append(content); if (title) { content.append(el('p', 'box-title', title)); title = null; } }
         return content;
       };
       for (; k < to; k++) {
-        const line = lines[k], phrases = item.fmt?.q?.[k];
+        const line = lines[k], phrases = item.fmt?.q?.[src[k]];
         const img = figure(line); if (img) { group.append(img); mcq = options = null; continue; }
         const legendLine = line.match(LEGEND);
         if (legendLine) { if (!legend) { legend = el('div', 'q-legend'); group.append(legend); } legend.append(el('b', '', el('i', '', legendLine[1])), el('i', '', legendLine[2])); continue; }
@@ -219,11 +253,7 @@
         }
         mcq = null;
         // "Which TWO …" stems of choose-two items take the option list that follows.
-        if (isMCQ && /\?$|\bTWO\b|\bTHREE\b/.test(line) && !/[.…]{4,}/.test(line)) {
-          const stem = el('div', 'q-stem', rich(line, phrases));
-          if (range) for (let n = Number(range[1]); n <= Number(range[2]); n++) if (free(n)) { used.add(n); stem.append(' ', answerInput(n)); }
-          mcq = el('div', 'mcq-opts'); stem.append(mcq); group.append(stem); continue;
-        }
+        if (isMCQ && /\?$|\bTWO\b|\bTHREE\b/.test(line) && !/[.…]{4,}/.test(line)) { stemFor(line, phrases); continue; }
         if (kind === 'flow') {
           let text = line;
           const lead = (phrases || []).find(p => p[0].includes('b') && line.startsWith(p[1]) && line.length > p[1].length);
@@ -231,7 +261,7 @@
           for (const step of text.split(/\s*[⬇↓]\s*/).filter(Boolean)) {
             const box2 = contentBox();
             if (box2.children.length && !box2.lastChild.classList.contains('box-title')) box2.append(el('div', 'flow-arrow', '↓'));
-            const s = el('div', 'flow-step'); fillGaps(s, step, phrases); box2.append(s);
+            const s = el('div', 'flow-step'); fillGaps(s, step.replace(/^[•\-–]\s*/, ''), phrases); box2.append(s);
           }
           continue;
         }
@@ -253,15 +283,34 @@
         group.append(p);
       }
       if (title) group.append(el('p', 'q-line', title));
+      // The books print a List of Headings before its questions, and other lists (people, plants, researchers…) after them.
+      const qs = group.querySelectorAll(':scope > .q-item');
+      // Options are listed in letter order, and a summary's word list follows the summary.
+      group.querySelectorAll('.opt-box').forEach(list => {
+        const opts = [...list.querySelectorAll(':scope > .opt')];
+        if (opts.every(o => /^[A-I]$/.test(o.firstChild.textContent))) opts.sort((a, b) => a.firstChild.textContent.localeCompare(b.firstChild.textContent)).forEach(o => list.append(o));
+        if (!qs.length && group.querySelector('.answer-input.gap')) group.append(list);
+      });
+      if (qs.length) group.querySelectorAll(':scope > .opt-box').forEach(list => {
+        if (/heading/i.test(instructions)) { if (list.compareDocumentPosition(qs[0]) & Node.DOCUMENT_POSITION_PRECEDING) qs[0].before(list); }
+        else if (list.compareDocumentPosition(qs[qs.length - 1]) & Node.DOCUMENT_POSITION_FOLLOWING) qs[qs.length - 1].after(list);
+      });
     });
     // Long lists of short options (summary word banks) are printed in columns in the books.
     box.querySelectorAll('.opt-box').forEach(list => { const opts = [...list.querySelectorAll('.opt')]; if (opts.length >= 6 && opts.every(o => o.textContent.length <= 30)) list.classList.add('cols'); });
     // Numbers the parser could not place (tables, unnumbered statements) still get a box.
-    const leftover = [];
-    for (let n = start; n <= end; n++) if (!used.has(n)) leftover.push(n);
-    if (leftover.length) {
-      const h = document.createElement('h3'); h.textContent = item ? '其餘題號作答區' : 'Answer sheet 1–40'; rest.append(h);
-      for (const n of leftover) { const label = document.createElement('label'); label.className = 'answer'; const b = document.createElement('b'); b.className = 'qnum'; b.textContent = n; label.append(b, answerInput(n)); rest.append(label); }
+    // Questions with no text to hold a box (labels on a diagram) get their boxes at the end of their own group;
+    // anything outside every group goes to the answer area below.
+    const groups = [...box.querySelectorAll('.q-group[data-range]')];
+    for (let n = start; n <= end; n++) {
+      if (used.has(n)) continue;
+      const label = el('label', 'answer', el('b', 'qnum', String(n)), answerInput(n));
+      // When even the heading is part of the diagram image, the boxes go under the nearest earlier group holding a figure.
+      const owner = groups.find(g => { const [a, b] = g.dataset.range.split('-').map(Number); return n >= a && n <= b; })
+        || groups.filter(g => Number(g.dataset.range.split('-')[1]) < n && g.querySelector('img')).pop();
+      if (owner) { let row = owner.querySelector(':scope > .answer-row'); if (!row) { row = el('div', 'answer-row'); owner.append(row); } row.append(label); continue; }
+      if (!rest.children.length) rest.append(el('h3', '', item ? '其餘題號作答區' : 'Answer sheet 1–40'));
+      rest.append(label);
     }
     for (let n = start; n <= end; n++) {
       const b = document.createElement('button'); b.type = 'button'; b.dataset.q = n; b.textContent = n; b.setAttribute('aria-label', `前往第 ${n} 題`);
@@ -369,19 +418,28 @@
 
   function showText() {
     const view = $('textView'); view.replaceChildren();
+    if (kind === 'reading') {
+      // Every passage in the books opens with its label and the time guidance.
+      const n = activeItem.id.split('-').pop();
+      view.append(el('p', 'passage-label', `READING PASSAGE ${n}`),
+        el('p', 'passage-intro', 'You should spend about 20 minutes on ', el('b', '', `Questions ${activeItem.start}–${activeItem.end}`), `, which are based on Reading Passage ${n} below.`));
+    }
     const title = document.createElement('h1'); title.textContent = activeItem.title; view.append(title);
     const parent = kind === 'reading' ? view : document.createElement('div');
     if (kind === 'writing') { parent.className = 'prompt-box'; view.append(parent); }
+    // The books letter paragraphs only when questions refer to them; numbers were added by the handouts.
+    const lettered = /\b(?:paragraphs?|sections?)\b[^.?]*\b[A-I]\s*[–-]\s*[A-I]\b|\b(?:paragraph|section)\s+[A-I]\b/i.test((activeItem.questions || []).join(' '));
     (kind === 'reading' ? activeItem.passage : activeItem.prompt).forEach((content, k) => {
       if (content === activeItem.title) return;
       const phrases = activeItem.fmt?.p?.[k];
       const img = figure(content); if (img) { parent.append(img); return; }
       if (content.includes(' | ')) { parent.append(makeTable(content, (td, text) => td.append(rich(text, phrases)))); return; }
       const p = document.createElement('p');
-      // Paragraph letters/numbers (A., 1.) are what matching questions refer to, so make them stand out.
+      // A title and subtitle typed on one line: the title is already the heading, the rest is the subtitle.
+      if (k === 0 && kind === 'reading' && content.startsWith(activeItem.title)) { p.className = 'subtitle'; p.append(rich(content.slice(activeItem.title.length).trim(), phrases)); parent.append(p); return; }
       const label = kind === 'reading' && content.match(/^([A-Z]|\d{1,2})\.\s+/);
-      if (label) { const b = document.createElement('b'); b.className = 'para-label'; b.textContent = label[1]; p.append(b, rich(content.slice(label[0].length), phrases)); }
-      else p.append(rich(content, phrases));
+      if (label && lettered && /[A-Z]/.test(label[1])) { const b = document.createElement('b'); b.className = 'para-label'; b.textContent = label[1]; p.append(b, rich(content.slice(label[0].length), phrases)); }
+      else p.append(rich(label ? content.slice(label[0].length) : content, phrases));
       parent.append(p);
     });
     for (const image of activeItem.images || []) { const img = document.createElement('img'); img.src = image; img.alt = '題目圖表'; img.className = 'task-figure'; parent.append(img); }
