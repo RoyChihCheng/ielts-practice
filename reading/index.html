@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>閱讀練習 | IELTS Practice Studio</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body data-kind="reading">
+<header class="exam-bar">
+  <a class="brand" href="../">IELTS<span>Reading</span></a>
+  <select id="material" aria-label="選擇文章"><option value="">選擇閱讀文章…</option></select>
+  <div class="timer-box"><span id="clock" class="clock" role="timer" aria-label="剩餘時間">20:00</span><button id="timer" type="button">開始計時</button></div>
+  <label class="size">字級 <select id="fontsize" aria-label="文字大小"><option value="20">標準</option><option value="24">大</option><option value="28" selected>特大</option><option value="32">最大</option><option value="40">超大</option></select></label>
+  <details class="more"><summary>工具</summary><div class="more-menu">
+    <a href="../">← 首頁</a><a href="../writing/">寫作練習 →</a>
+    <label>練習名稱 <input id="attempt" maxlength="80" placeholder="預設" title="同一篇文章可使用不同名稱分開保存作答"></label>
+    <button id="resetTimer" type="button">重設計時</button>
+    <button id="download" type="button" class="primary">下載備份</button>
+    <label class="upload">還原備份<input class="file-input" id="restore" type="file" accept="application/json,.json"></label>
+    <label class="upload">開啟其他 PDF<input class="file-input" id="pdf" type="file" accept="application/pdf,.pdf"></label>
+  </div></details>
+</header>
+<div class="part-banner"><strong id="partTitle">Reading</strong><span id="partHint">從上方選擇文章後開始作答。</span><small id="filename"></small></div>
+<main class="layout">
+  <section class="pane document" aria-label="閱讀文章">
+    <div class="view-controls"><button id="viewText" type="button" class="active">文章</button><button id="viewPdf" type="button">原始 PDF</button><button id="focus" type="button" aria-pressed="false">專注閱讀</button></div>
+    <div class="empty" id="empty"><strong>準備好開始了嗎？</strong>從上方選擇一篇文章。文章顯示在左側，題目和作答格在右側；選取文字後按右鍵可畫重點。</div>
+    <article id="textView" class="text-view" hidden></article>
+    <iframe id="viewer" title="閱讀講義 PDF" hidden></iframe>
+    <a id="pdfLink" hidden target="_blank" rel="noopener">另開 PDF（若瀏覽器無法內嵌顯示）</a>
+  </section>
+  <div id="splitter" class="splitter" role="separator" aria-label="拖曳調整文章與題目寬度" aria-orientation="vertical" tabindex="0"></div>
+  <section class="pane work" aria-label="題目與作答">
+    <div id="questionText" class="question-text"></div>
+    <div id="answers" class="answers"></div>
+    <p id="status" class="status" role="status"></p>
+    <p class="notice">作答自動保存在此瀏覽器。換裝置或清除瀏覽器資料前，請從「工具」下載備份。</p>
+  </section>
+</main>
+<nav id="qnav" class="qnav" aria-label="題號導覽"></nav>
+<script src="../practice-data.js"></script>
+<script src="../shared.js"></script>
+<script src="../app.js"></script>
+</body>
+</html>
