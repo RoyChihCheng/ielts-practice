@@ -1,1 +1,55 @@
-﻿<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>IELTS Practice Studio</title><link rel="stylesheet" href="style.css"></head><body><main class="home"><div class="brand" style="color:#a63831">IELTS PRACTICE STUDIO</div><h1>專注練習，<br>從這裡開始。</h1><p>選擇完整閱讀文章或寫作題目，直接在線上閱讀與作答。</p><div class="cards"><a class="card" href="reading/"><strong>01　閱讀練習 →</strong><span>直接閱讀全文、查看題目並記錄每題答案。</span></a><a class="card" href="writing/"><strong>02　寫作練習 →</strong><span>直接顯示寫作題幹與圖表，寫作內容可隨時備份。</span></a></div><p>作答保存在目前的瀏覽器；換裝置前請下載備份。</p></main></body></html>
+﻿<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IELTS Practice Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Serif+TC:wght@600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="home-page">
+<main class="home">
+  <p class="eyebrow">IELTS Practice Studio · Academic</p>
+  <h1>像考場一樣練習，<br><em>把每一分鐘</em>用在題目上。</h1>
+  <p class="lede">電腦考版面：左側文章或題目，右側作答。計時、題號導覽、畫重點、字數統計，作答自動保存在你的瀏覽器。</p>
+  <div class="cards">
+    <a class="card" href="reading/">
+      <span class="card-num">01</span>
+      <strong>閱讀 Reading</strong>
+      <span class="card-stat"><b id="readingCount">–</b> 篇文章</span>
+      <span class="card-desc">作答格嵌在題目中，底部題號列可跳題；每篇 20 分鐘。</span>
+      <span class="card-go">開始閱讀 →</span>
+    </a>
+    <a class="card" href="writing/">
+      <span class="card-num">02</span>
+      <strong>寫作 Writing</strong>
+      <span class="card-stat"><b id="writingCount">–</b> 道題目</span>
+      <span class="card-desc">Task 1 圖表 20 分鐘、Task 2 議論 40 分鐘；無拼字檢查，即時字數。</span>
+      <span class="card-go">開始寫作 →</span>
+    </a>
+  </div>
+  <div id="resume" class="resume" hidden></div>
+  <ol class="tips">
+    <li><b>計時</b>按「開始計時」模擬考試；最後 5 分鐘轉紅，時間到自動鎖定作答。</li>
+    <li><b>畫重點</b>選取文章文字後按右鍵，或按「畫重點」按鈕。</li>
+    <li><b>備份</b>作答只存在這台裝置的瀏覽器；換裝置前請從「工具」下載備份。</li>
+  </ol>
+</main>
+<script src="practice-data.js"></script>
+<script>
+  // Counts come from the data so they never go stale; "continue" links reopen the last item per skill.
+  const data = window.ieltsPractice;
+  document.getElementById('readingCount').textContent = data.reading.length;
+  document.getElementById('writingCount').textContent = data.writing.length;
+  const resume = document.getElementById('resume');
+  for (const kind of ['reading', 'writing']) {
+    let id = ''; try { id = localStorage.getItem(`ielts-${kind}-last`) || ''; } catch {}
+    const item = data[kind].find(x => x.id === id); if (!item) continue;
+    const a = document.createElement('a'); a.href = `${kind}/#${encodeURIComponent(id)}`;
+    a.textContent = `繼續${kind === 'reading' ? '閱讀' : '寫作'}：${kind === 'reading' ? item.title : item.label}`;
+    resume.append(a); resume.hidden = false;
+  }
+</script>
+</body>
+</html>

@@ -23,6 +23,7 @@
     if (kind === 'reading') {
       document.querySelectorAll('.answer-input').forEach(input => { input.value = drafts.answers[input.dataset.q - 1]; });
       document.querySelectorAll('#qnav button[data-q]').forEach(b => b.classList.toggle('answered', !!drafts.answers[b.dataset.q - 1].trim()));
+      updateCount();
     } else {
       $('editor').value = drafts[task];
       updateWordCount();
@@ -30,17 +31,40 @@
     }
   }
 
+  // Handout content arrives as lines: "[[IMG:path]]" is a figure, " | " separates table cells (rows by newline).
+  function figure(line) {
+    const m = line.match(/^\[\[IMG:(.+)\]\]$/); if (!m) return null;
+    const img = document.createElement('img'); img.src = m[1]; img.alt = '題目圖表'; img.className = 'task-figure'; img.loading = 'lazy';
+    return img;
+  }
+  function makeTable(line, fill) {
+    const table = document.createElement('table'); table.className = 'q-table';
+    for (const row of line.split('\n')) { const tr = table.insertRow(); for (const cell of row.split(' | ')) fill(tr.insertCell(), cell); }
+    const head = table.rows[0];
+    table.classList.toggle('has-head', table.rows.length > 2 && !head.querySelector('input') && !/^(?:[A-Z]|[ivx]+)$/.test(head.cells[0].textContent.trim()));
+    return table;
+  }
+
   // Reading: answer boxes are placed inline in the question text, like the computer-delivered test.
-  const gapPattern = /(\d{1,2})\s*(?:[.…]{3,}|_{3,})/g;
+  const gapPattern = /(\d{1,2})\.?\s*(?:[.…]{3,}|_{3,})/g;
   const blankPattern = /[.…]{4,}|_{3,}/;
+  let currentQ = 0;
+  function updateCount() {
+    const buttons = [...document.querySelectorAll('#qnav button[data-q]')];
+    $('qcount').textContent = buttons.length ? `已作答 ${buttons.filter(b => b.classList.contains('answered')).length} / ${buttons.length}` : '';
+  }
   function answerInput(n) {
     const input = document.createElement('input');
     input.className = 'answer-input'; input.dataset.q = n; input.placeholder = n;
     input.autocomplete = 'off'; input.spellcheck = false; input.readOnly = locked;
     input.setAttribute('aria-label', `Question ${n}`);
-    input.addEventListener('input', () => { drafts.answers[n - 1] = input.value; save(); $('qnav').querySelector(`[data-q="${n}"]`)?.classList.toggle('answered', !!input.value.trim()); });
-    input.addEventListener('focus', () => document.querySelectorAll('#qnav button').forEach(b => b.classList.toggle('current', b.dataset.q === String(n))));
+    input.addEventListener('input', () => { drafts.answers[n - 1] = input.value; save(); $('qnav').querySelector(`[data-q="${n}"]`)?.classList.toggle('answered', !!input.value.trim()); updateCount(); });
+    input.addEventListener('focus', () => { currentQ = n; document.querySelectorAll('#qnav button').forEach(b => b.classList.toggle('current', b.dataset.q === String(n))); });
     return input;
+  }
+  function goTo(n) {
+    const input = document.querySelector(`.answer-input[data-q="${n}"]`); if (!input) return;
+    input.scrollIntoView({ block: 'center', behavior: 'smooth' }); input.focus({ preventScroll: true });
   }
   function buildQuestions(item) {
     const box = $('questionText'), rest = $('answers'), nav = $('qnav');
@@ -59,21 +83,12 @@
     };
     for (const line of item ? item.questions : []) {
       if (/^Questions?\s+\d/i.test(line)) { const h = document.createElement('h3'); h.textContent = line; box.append(h); continue; }
-      if (line.includes(' | ')) {
-        // Tables from the handout arrive as rows joined by newlines, cells by " | ".
-        const table = document.createElement('table'); table.className = 'q-table';
-        for (const row of line.split('\n')) {
-          const tr = table.insertRow();
-          for (const cell of row.split(' | ')) fillGaps(tr.insertCell(), cell);
-        }
-        const head = table.rows[0];
-        table.classList.toggle('has-head', table.rows.length > 2 && !head.querySelector('input') && !/^(?:[A-Z]|[ivx]+)$/.test(head.cells[0].textContent.trim()));
-        box.append(table); continue;
-      }
+      const img = figure(line); if (img) { box.append(img); continue; }
+      if (line.includes(' | ')) { box.append(makeTable(line, fillGaps)); continue; }
       const p = document.createElement('p');
       if (fillGaps(p, line)) { box.append(p); continue; }
       p.replaceChildren();
-      const lead = line.match(/^(\d{1,2})\s+(\S[\s\S]*)$/);
+      const lead = line.match(/^(\d{1,2})\.?\s+(\S[\s\S]*)$/);
       if (lead && free(Number(lead[1]))) {
         const n = Number(lead[1]); used.add(n); p.className = 'q-item';
         const num = document.createElement('b'); num.className = 'qnum'; num.textContent = n;
@@ -92,9 +107,10 @@
     }
     for (let n = start; n <= end; n++) {
       const b = document.createElement('button'); b.type = 'button'; b.dataset.q = n; b.textContent = n; b.setAttribute('aria-label', `前往第 ${n} 題`);
-      b.addEventListener('click', () => { const input = document.querySelector(`.answer-input[data-q="${n}"]`); input.scrollIntoView({ block: 'center', behavior: 'smooth' }); input.focus({ preventScroll: true }); });
+      b.addEventListener('click', () => goTo(n));
       nav.append(b);
     }
+    currentQ = 0;
   }
 
   function updateWordCount() {
@@ -102,9 +118,15 @@
     $('wordcount').textContent = `Word count: ${words}`;
     $('target').textContent = words >= min ? `已達 ${min} 字` : `至少 ${min} 字，尚差 ${min - words} 字`;
     $('target').classList.toggle('met', words >= min);
+    $('wcbar').style.setProperty('--p', `${Math.min(100, words / min * 100)}%`);
+    $('wcbar').classList.toggle('met', words >= min);
   }
-  if (kind === 'reading') buildQuestions(null);
-  else {
+  if (kind === 'reading') {
+    // The blank 1–40 answer sheet is only for a student's own PDF; until then the pane shows its placeholder.
+    const step = d => { const qs = [...document.querySelectorAll('#qnav button[data-q]')].map(b => Number(b.dataset.q)); if (!qs.length) return; goTo(currentQ ? Math.min(qs.at(-1), Math.max(qs[0], currentQ + d)) : qs[0]); };
+    $('prevQ').addEventListener('click', () => step(-1));
+    $('nextQ').addEventListener('click', () => step(1));
+  } else {
     $('editor').addEventListener('input', e => { drafts[task] = e.target.value; updateWordCount(); save(); });
     for (const id of ['task1', 'task2']) $(id).addEventListener('click', () => { task = id; render(); });
   }
@@ -138,7 +160,14 @@
     if (kind === 'writing') { parent.className = 'prompt-box'; view.append(parent); }
     for (const content of (kind === 'reading' ? activeItem.passage : activeItem.prompt)) {
       if (content === activeItem.title) continue;
-      const p = document.createElement('p'); p.textContent = content; parent.append(p);
+      const img = figure(content); if (img) { parent.append(img); continue; }
+      if (content.includes(' | ')) { parent.append(makeTable(content, (td, text) => td.append(text))); continue; }
+      const p = document.createElement('p');
+      // Paragraph letters/numbers (A., 1.) are what matching questions refer to, so make them stand out.
+      const label = kind === 'reading' && content.match(/^([A-Z]|\d{1,2})\.\s+/);
+      if (label) { const b = document.createElement('b'); b.className = 'para-label'; b.textContent = label[1]; p.append(b, content.slice(label[0].length)); }
+      else p.textContent = content;
+      parent.append(p);
     }
     for (const image of activeItem.images || []) { const img = document.createElement('img'); img.src = image; img.alt = '題目圖表'; img.className = 'task-figure'; parent.append(img); }
     view.scrollTop = 0;
@@ -156,16 +185,21 @@
   $('viewText').addEventListener('click', () => setView('text'));
   $('viewPdf').addEventListener('click', () => setView('pdf'));
 
-  // Right-click highlighting, as in the real test. shortcut: highlights are not saved, persist them if students ask.
-  $('textView').addEventListener('contextmenu', e => {
-    const mark = e.target.closest('mark');
-    if (mark) { e.preventDefault(); mark.replaceWith(...mark.childNodes); return; }
+  // Right-click highlighting, as in the real test; the button does the same on touch screens.
+  // shortcut: highlights are not saved, persist them if students ask.
+  function highlight(target) {
+    const mark = target?.closest?.('mark') || getSelection().anchorNode?.parentElement?.closest('#textView mark');
     const selection = getSelection();
-    if (selection.isCollapsed || !$('textView').contains(selection.anchorNode)) return;
-    e.preventDefault();
+    if (mark && selection.isCollapsed) { mark.replaceWith(...mark.childNodes); return true; }
+    if (selection.isCollapsed || !$('textView').contains(selection.anchorNode)) return false;
     try { selection.getRangeAt(0).surroundContents(document.createElement('mark')); } catch { $('status').textContent = '畫重點請在同一段落內選取。'; }
     selection.removeAllRanges();
-  });
+    return true;
+  }
+  $('textView').addEventListener('contextmenu', e => { if (highlight(e.target)) e.preventDefault(); });
+  // mousedown keeps the selection alive until the click.
+  $('highlightBtn')?.addEventListener('mousedown', e => e.preventDefault());
+  $('highlightBtn')?.addEventListener('click', () => { if (!highlight(null)) $('status').textContent = '先在文章中選取文字，再按「畫重點」；點一下重點再按可取消。'; });
 
   function setBanner(title, hint) { $('partTitle').textContent = title; $('partHint').textContent = hint; }
   function loadText(item) {
@@ -174,7 +208,7 @@
       buildQuestions(item);
       const count = item.end - item.start + 1;
       setLimit(Math.ceil(count / 14) * 20);
-      setBanner(`Questions ${item.start}–${item.end}`, `閱讀文章並回答第 ${item.start}–${item.end} 題。建議時間 ${limit / 60} 分鐘。選取文字後按右鍵可畫重點。`);
+      setBanner(`Questions ${item.start}–${item.end}`, `閱讀文章並回答第 ${item.start}–${item.end} 題。建議時間 ${limit / 60} 分鐘。選取文字後按右鍵或「畫重點」可畫重點。`);
     } else {
       task = item.task === 1 ? 'task1' : 'task2';
       document.querySelector('.tabs').hidden = true;
@@ -207,9 +241,50 @@
     const item = materials.find(entry => entry.id === e.target.value); if (!item) return;
     if (!canSwitch()) { e.target.value = ''; return; }
     if (pdfUrl) { URL.revokeObjectURL(pdfUrl); pdfUrl = null; }
-    showPdf(item.source, `${item.group} · ${item.title}`); loadText(item);
+    showPdf(item.source, `${item.group} · Week ${item.week} · ${item.title}`); loadText(item);
     setMaterialKey(`ielts-${kind}-question-${item.id}`);
+    history.replaceState(null, '', `#${item.id}`);
+    try { localStorage.setItem(`ielts-${kind}-last`, item.id); } catch {}
   });
+
+  // Question library: every item grouped by course and week, with this browser's progress.
+  function progress(item) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(`ielts-${kind}-question-${item.id}`) || 'null'); if (!saved) return '';
+      if (kind === 'reading') { const done = saved.answers.slice(item.start - 1, item.end).filter(a => a.trim()).length; return done ? `${done}/${item.end - item.start + 1}` : ''; }
+      const words = countWords(saved[item.task === 1 ? 'task1' : 'task2'] || ''); return words ? `${words} 字` : '';
+    } catch { return ''; }
+  }
+  function renderLibrary() {
+    const query = $('librarySearch').value.trim().toLowerCase(), list = $('libraryList'); list.replaceChildren();
+    for (const group of [...new Set(materials.map(item => item.group))]) {
+      const items = materials.filter(item => item.group === group && (!query || `${item.label} ${item.title} week ${item.week}`.toLowerCase().includes(query)));
+      if (!items.length) continue;
+      const section = document.createElement('section'); const h = document.createElement('h3'); h.textContent = group; section.append(h);
+      for (const item of items) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'lib-item'; b.classList.toggle('active', item === activeItem);
+        const meta = document.createElement('small'); meta.textContent = `Week ${item.week} · ${kind === 'reading' ? `Q${item.start}–${item.end}` : `Task ${item.task}`}`;
+        const name = document.createElement('span'); name.textContent = kind === 'reading' ? item.title : item.label.replace(/^Task \d · /, '');
+        const done = progress(item); const badge = document.createElement('em'); badge.textContent = done; badge.hidden = !done;
+        b.append(meta, name, badge);
+        b.addEventListener('click', () => { $('library').close(); $('material').value = item.id; $('material').dispatchEvent(new Event('change')); });
+        section.append(b);
+      }
+      list.append(section);
+    }
+    if (!list.children.length) list.textContent = '找不到符合的題目。';
+  }
+  for (const id of ['libraryBtn', 'emptyLibrary']) $(id).addEventListener('click', () => { $('librarySearch').value = ''; renderLibrary(); $('library').showModal(); $('librarySearch').focus(); });
+  $('librarySearch').addEventListener('input', renderLibrary);
+  $('libraryClose').addEventListener('click', () => $('library').close());
+  $('library').addEventListener('click', e => { if (e.target === $('library')) $('library').close(); });
+  // Deep link: reading/#<id> opens that item (used by "continue" on the home page).
+  function openFromHash() {
+    const linked = decodeURIComponent(location.hash.slice(1));
+    if (linked !== activeItem?.id && materials.some(item => item.id === linked)) { $('material').value = linked; $('material').dispatchEvent(new Event('change')); }
+  }
+  openFromHash();
+  addEventListener('hashchange', openFromHash);
   $('pdf').addEventListener('change', e => {
     const file = e.target.files[0]; if (!file) return;
     if (!file.name.toLowerCase().endsWith('.pdf')) { alert('請選擇 PDF 檔案。'); return; }
