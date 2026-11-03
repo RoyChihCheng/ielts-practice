@@ -267,6 +267,8 @@ mark.hl.flash{box-shadow:0 0 0 4px #1d64d866}
 .answer-input.is-wrong{border-color:#c62828;background:#fdeeee}
 .key-answer{display:inline-block;margin:0 .3em;padding:0 .45em;border-radius:4px;font:700 .78em/1.6 var(--ui);vertical-align:middle}
 .key-answer.ok{color:var(--ok);background:#e5f2ea}.key-answer.bad{color:#b3261e;background:#fbe3e1}
+.check-one{margin:.2em;padding:.15em .55em;border:1px solid #4e6578;border-radius:4px;background:#fff;color:#183c57;font:600 .7em/1.5 var(--ui);cursor:pointer;vertical-align:middle}
+.check-one:hover:not(:disabled){background:#eaf2f8}.check-one:disabled{opacity:.5;cursor:not-allowed}
 .qnav button.ok{background:var(--ok);border-color:var(--ok);color:#fff}
 .qnav button.bad{background:#c62828;border-color:#c62828;color:#fff}
 @media(max-width:900px){.notes-panel{position:fixed;top:auto;left:8px;right:8px;bottom:64px;width:auto;max-height:70dvh}.qbar>.check-btn{padding:8px 12px}}

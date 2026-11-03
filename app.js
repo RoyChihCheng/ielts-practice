@@ -12,6 +12,7 @@
   }
   function load() {
     drafts = emptyDraft();
+    revealedQuestions.clear();
     $('status').textContent = '';
     try {
       const saved = JSON.parse(localStorage.getItem(key) || 'null');
@@ -23,7 +24,7 @@
     if (kind === 'reading') {
       document.querySelectorAll('.answer-input').forEach(input => { input.value = drafts.answers[input.dataset.q - 1]; });
       document.querySelectorAll('#qnav button[data-q]').forEach(b => b.classList.toggle('answered', !!drafts.answers[b.dataset.q - 1].trim()));
-      if (checking) showResults(); else updateCount();
+      if (activeItem) showResults(); else updateCount();
     } else {
       $('editor').value = drafts[task];
       updateWordCount();
@@ -69,12 +70,29 @@
     return frag;
   }
   const passageWords = item => countWords(item.passage.filter(l => !l.startsWith('[[IMG') && l !== item.title).join(' ').replace(/\|/g, ' '));
+  // Book/test references were matched by passage text against the source books, not inferred from lesson order.
+  const trainerTests = {
+    '1-R-1-1': 1, '1-R-1-2': 1, '1-R-1-3': 1,
+    '1-R-2-1': 2, '1-R-2-2': 2, '1-R-2-3': 2,
+    '1-R-3-1': 3, '1-R-3-2': 3,
+    '1-R-4-1': 4, '1-R-5-2': 4, '1-R-5-3': 4,
+    '1-R-6-1': 5, '1-R-6-2': 5, '1-R-7-3': 5,
+    '1-R-7-1': 6, '1-R-8-2': 6, '1-R-8-3': 6
+  };
+  function readingReference(item) {
+    if (item.id.startsWith('21-R-')) return `Cambridge 21 · Test ${item.test}`;
+    if (/^0-R-(?:[5-9]|1[0-2])-[123]$/.test(item.id)) return `Official Guide · Test ${item.week - 4}`;
+    if (/^1-R-(?:9|1[0-2])-[123]$/.test(item.id)) return `Cambridge 20 · Test ${item.week - 8}`;
+    if (trainerTests[item.id]) return `Trainer 2 · Test ${trainerTests[item.id]}`;
+    return `講義第 ${item.week} 週（原書回次未確認）`;
+  }
 
   // Reading: answer boxes are placed inline in the question text, like the computer-delivered test.
   const gapPattern = /(\d{1,2})\.?\s*(?:[.…]{3,}|_{3,})/g;
   const blankPattern = /[.…]{4,}|_{3,}/;
   const numberedGap = /(\d{1,2})\.?\s*(?:[.…]{3,}|_{3,})/;
   let currentQ = 0, checking = false;
+  const revealedQuestions = new Set();
   function updateCount() {
     const buttons = [...document.querySelectorAll('#qnav button[data-q]')];
     $('qcount').textContent = buttons.length ? `已作答 ${buttons.filter(b => b.classList.contains('answered')).length} / ${buttons.length}` : '';
@@ -87,7 +105,7 @@
     input.addEventListener('input', () => {
       drafts.answers[n - 1] = input.value; save();
       $('qnav').querySelector(`[data-q="${n}"]`)?.classList.toggle('answered', !!input.value.trim());
-      if (checking) showResults(); else updateCount();
+      if (checking || revealedQuestions.size) showResults(); else updateCount();
     });
     input.addEventListener('focus', () => { currentQ = n; document.querySelectorAll('#qnav button').forEach(b => b.classList.toggle('current', b.dataset.q === String(n))); });
     return input;
@@ -312,6 +330,23 @@
       if (!rest.children.length) rest.append(el('h3', '', item ? '其餘題號作答區' : 'Answer sheet 1–40'));
       rest.append(label);
     }
+    if (item) for (const input of [...box.querySelectorAll('.answer-input'), ...rest.querySelectorAll('.answer-input')]) {
+      const n = Number(input.dataset.q), button = document.createElement('button');
+      button.type = 'button'; button.className = 'check-one'; button.dataset.q = n;
+      button.textContent = '對答案'; button.setAttribute('aria-label', `核對第 ${n} 題答案`);
+      button.disabled = !item.answers?.[n];
+      button.title = button.disabled ? '這一題沒有可用的答案鍵' : '只顯示這一題的答案';
+      button.addEventListener('click', () => {
+        if (revealedQuestions.has(n)) revealedQuestions.delete(n);
+        else {
+          revealedQuestions.add(n);
+          if (deadline) $('timer').click(); // pause while the student reviews the answer
+        }
+        showResults();
+      });
+      const label = input.closest('label.answer');
+      (label || input).after(button);
+    }
     for (let n = start; n <= end; n++) {
       const b = document.createElement('button'); b.type = 'button'; b.dataset.q = n; b.textContent = n; b.setAttribute('aria-label', `前往第 ${n} 題`);
       b.addEventListener('click', () => goTo(n));
@@ -350,16 +385,25 @@
   function showResults() {
     clearResults();
     const res = results(); let score = 0;
+    document.querySelectorAll('.check-one').forEach(button => {
+      const shown = checking || revealedQuestions.has(Number(button.dataset.q));
+      button.textContent = shown ? '隱藏' : '對答案';
+      button.disabled = checking || !activeItem?.answers?.[button.dataset.q];
+      button.title = checking ? '先隱藏全部答案，再個別核對' : button.disabled ? '這一題沒有可用的答案鍵' : '只顯示這一題的答案';
+      button.setAttribute('aria-pressed', String(shown));
+    });
     for (const [n, r] of Object.entries(res)) {
+      if (!checking && !revealedQuestions.has(Number(n))) continue;
       const input = document.querySelector(`.answer-input[data-q="${n}"]`);
       const mark = document.createElement('span'); mark.className = `key-answer ${r.ok ? 'ok' : 'bad'}`;
-      mark.textContent = r.ok ? '✓' : `✗ ${r.keys.join(' / ')}`;
+      mark.textContent = `${r.ok ? '✓' : '✗'} ${r.keys.join(' / ')}`;
       input?.classList.add(r.ok ? 'is-correct' : 'is-wrong'); input?.after(mark);
       $('qnav').querySelector(`[data-q="${n}"]`)?.classList.add(r.ok ? 'ok' : 'bad');
       score += r.ok;
     }
     const total = activeItem.end - activeItem.start + 1, keyed = Object.keys(res).length;
-    $('qcount').textContent = `得分 ${score} / ${keyed}${keyed < total ? `（${total - keyed} 題無答案鍵）` : ''}`;
+    if (checking) $('qcount').textContent = `得分 ${score} / ${keyed}${keyed < total ? `（${total - keyed} 題無答案鍵）` : ''}`;
+    else updateCount();
     return { score, keyed, total, res };
   }
   function toggleCheck() {
@@ -372,7 +416,7 @@
       if (deadline) $('timer').click(); // pause the clock while reviewing
       const { score, keyed } = showResults();
       $('status').textContent = `已對答案：${score} / ${keyed}。可在「筆記」下載你的作答、畫線與註記。`;
-    } else { clearResults(); updateCount(); }
+    } else { showResults(); }
   }
 
   function updateWordCount() {
@@ -427,8 +471,6 @@
     const title = document.createElement('h1'); title.textContent = activeItem.title; view.append(title);
     const parent = kind === 'reading' ? view : document.createElement('div');
     if (kind === 'writing') { parent.className = 'prompt-box'; view.append(parent); }
-    // The books letter paragraphs only when questions refer to them; numbers were added by the handouts.
-    const lettered = /\b(?:paragraphs?|sections?)\b[^.?]*\b[A-I]\s*[–-]\s*[A-I]\b|\b(?:paragraph|section)\s+[A-I]\b/i.test((activeItem.questions || []).join(' '));
     (kind === 'reading' ? activeItem.passage : activeItem.prompt).forEach((content, k) => {
       if (content === activeItem.title) return;
       const phrases = activeItem.fmt?.p?.[k];
@@ -438,8 +480,8 @@
       // A title and subtitle typed on one line: the title is already the heading, the rest is the subtitle.
       if (k === 0 && kind === 'reading' && content.startsWith(activeItem.title)) { p.className = 'subtitle'; p.append(rich(content.slice(activeItem.title.length).trim(), phrases)); parent.append(p); return; }
       const label = kind === 'reading' && content.match(/^([A-Z]|\d{1,2})\.\s+/);
-      if (label && lettered && /[A-Z]/.test(label[1])) { const b = document.createElement('b'); b.className = 'para-label'; b.textContent = label[1]; p.append(b, rich(content.slice(label[0].length), phrases)); }
-      else p.append(rich(label ? content.slice(label[0].length) : content, phrases));
+      if (label) { const b = document.createElement('b'); b.className = 'para-label'; b.textContent = label[1]; p.append(b, rich(content.slice(label[0].length), phrases)); }
+      else p.append(rich(content, phrases));
       parent.append(p);
     });
     for (const image of activeItem.images || []) { const img = document.createElement('img'); img.src = image; img.alt = '題目圖表'; img.className = 'task-figure'; parent.append(img); }
@@ -618,7 +660,9 @@
   for (const group of [...new Set(materials.map(item => item.group))]) {
     const options = document.createElement('optgroup'); options.label = group;
     for (const item of materials.filter(entry => entry.group === group)) {
-      const option = document.createElement('option'); option.value = item.id; option.textContent = item.label; options.append(option);
+      const option = document.createElement('option'); option.value = item.id;
+      const label = kind === 'reading' && item.label === item.label.toUpperCase() ? item.label.toLowerCase().replace(/^\p{L}/u, c => c.toUpperCase()) : item.label;
+      option.textContent = kind === 'reading' ? `${readingReference(item)} · ${label}` : label; options.append(option);
     }
     $('material').append(options);
   }
@@ -638,7 +682,7 @@
     const item = materials.find(entry => entry.id === e.target.value); if (!item) return;
     if (!canSwitch()) { e.target.value = ''; return; }
     if (pdfUrl) { URL.revokeObjectURL(pdfUrl); pdfUrl = null; }
-    showPdf(item.source, `${item.group} · Week ${item.week} · ${item.title}`); loadText(item);
+    showPdf(item.source, `${kind === 'reading' ? readingReference(item) : `${item.group} · Week ${item.week}`} · ${item.title}`); loadText(item);
     setMaterialKey(`ielts-${kind}-question-${item.id}`);
     history.replaceState(null, '', `#${item.id}`);
     try { localStorage.setItem(`ielts-${kind}-last`, item.id); } catch {}
@@ -655,12 +699,12 @@
   function renderLibrary() {
     const query = $('librarySearch').value.trim().toLowerCase(), list = $('libraryList'); list.replaceChildren();
     for (const group of [...new Set(materials.map(item => item.group))]) {
-      const items = materials.filter(item => item.group === group && (!query || `${item.label} ${item.title} week ${item.week}`.toLowerCase().includes(query)));
+      const items = materials.filter(item => item.group === group && (!query || `${item.label} ${item.title} week ${item.week} ${kind === 'reading' ? readingReference(item) : ''}`.toLowerCase().includes(query)));
       if (!items.length) continue;
       const section = document.createElement('section'); const h = document.createElement('h3'); h.textContent = group; section.append(h);
       for (const item of items) {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'lib-item'; b.classList.toggle('active', item === activeItem);
-        const meta = document.createElement('small'); meta.textContent = `Week ${item.week} · ${kind === 'reading' ? `Q${item.start}–${item.end} · ${passageWords(item)} 字` : `Task ${item.task}`}`;
+        const meta = document.createElement('small'); meta.textContent = kind === 'reading' ? `${readingReference(item)} · Q${item.start}–${item.end} · ${passageWords(item)} 字` : `${item.test ? `Test ${item.test}` : `Week ${item.week}`} · Task ${item.task}`;
         const name = document.createElement('span'); name.textContent = kind === 'reading' ? item.title : item.label.replace(/^Task \d · /, '');
         const done = progress(item); const badge = document.createElement('em'); badge.textContent = done; badge.hidden = !done;
         b.append(meta, name, badge);
