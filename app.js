@@ -81,6 +81,7 @@
   };
   function readingReference(item) {
     if (item.id.startsWith('21-R-')) return `Cambridge 21 · Test ${item.test}`;
+    if (item.id === '1-R-4-3') return 'Trainer 2 General Training · Test 3';
     if (/^0-R-(?:[5-9]|1[0-2])-[123]$/.test(item.id)) return `Official Guide · Test ${item.week - 4}`;
     if (/^1-R-(?:9|1[0-2])-[123]$/.test(item.id)) return `Cambridge 20 · Test ${item.week - 8}`;
     if (trainerTests[item.id]) return `Trainer 2 · Test ${trainerTests[item.id]}`;
