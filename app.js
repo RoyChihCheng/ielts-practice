@@ -53,6 +53,25 @@
     const img = document.createElement('img'); img.src = m[1]; img.alt = '題目圖表'; img.className = 'task-figure'; img.loading = 'lazy';
     return img;
   }
+  // The original files remain available as a fallback for browsers without WebP.
+  function optimizedTaskImage(url) {
+    return url.startsWith('../figures/') && /\.png$/i.test(url) ? url.replace('../figures/', '../figures/optimized/') + '.webp' : url;
+  }
+  function taskImage(url) {
+    const frame = document.createElement('figure'); frame.className = 'task-image-frame';
+    const status = document.createElement('figcaption'); status.className = 'figure-status'; status.setAttribute('role', 'status'); status.textContent = '題目圖表載入中…';
+    const img = document.createElement('img'); img.alt = '寫作題目圖表'; img.className = 'task-figure'; img.loading = 'eager'; img.fetchPriority = 'high';
+    const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = '重新載入圖表'; retry.hidden = true;
+    const original = document.createElement('a'); original.href = url; original.target = '_blank'; original.rel = 'noopener'; original.textContent = '另開原始圖檔'; original.hidden = true;
+    let fallback = false;
+    img.addEventListener('load', () => { frame.classList.remove('loading', 'failed'); status.textContent = '題目圖表'; retry.hidden = true; original.hidden = true; });
+    img.addEventListener('error', () => {
+      if (!fallback && optimizedTaskImage(url) !== url) { fallback = true; status.textContent = '正在嘗試載入原始圖檔…'; img.src = url; return; }
+      frame.classList.remove('loading'); frame.classList.add('failed'); status.textContent = '圖表載入失敗，請檢查網路後重試。'; retry.hidden = false; original.hidden = false;
+    });
+    retry.addEventListener('click', () => { fallback = true; frame.classList.remove('failed'); frame.classList.add('loading'); status.textContent = '題目圖表重新載入中…'; retry.hidden = true; original.hidden = true; const src = new URL(url, location.href); src.searchParams.set('retry', Date.now()); img.src = src.href; });
+    frame.classList.add('loading'); frame.append(status, img, retry, original); img.src = optimizedTaskImage(url); return frame;
+  }
   function makeTable(line, fill) {
     const table = document.createElement('table'); table.className = 'q-table';
     // Line breaks inside a cell arrive as U+2028 (rows are split on "\n"); cells use pre-wrap, so "\n" shows as a break.
@@ -534,7 +553,8 @@
       else p.append(rich(content, phrases));
       parent.append(p);
     });
-    for (const image of activeItem.images || []) { const img = document.createElement('img'); img.src = image; img.alt = '題目圖表'; img.className = 'task-figure'; parent.append(img); }
+    for (const image of activeItem.images || []) parent.append(taskImage(image));
+    if (kind === 'writing') $('viewFigure').hidden = !parent.querySelector('.task-image-frame, table');
     applyMarks();
     view.scrollTop = 0;
   }
@@ -545,11 +565,13 @@
     $('pdfLink').hidden = textMode || !$('viewer').src;
     $('viewText').classList.toggle('active', textMode);
     $('viewPdf').classList.toggle('active', !textMode);
+    if (kind === 'writing' && !textMode) $('viewFigure').hidden = true;
     if (textMode) showText();
   }
   $('focus').addEventListener('click', () => { const active = layout.classList.toggle('focus'); $('focus').textContent = active ? '顯示作答區' : '專注閱讀'; $('focus').setAttribute('aria-pressed', String(active)); });
   $('viewText').addEventListener('click', () => setView('text'));
   $('viewPdf').addEventListener('click', () => setView('pdf'));
+  if (kind === 'writing') $('viewFigure').addEventListener('click', () => { const target = $('textView').querySelector('.task-image-frame, table'); if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
 
   // ── Highlights and notes ─────────────────────────────────
   // A highlight is stored as character offsets inside one block of the text (a paragraph, heading or table),
@@ -846,7 +868,7 @@
         const name = document.createElement('span'); name.textContent = kind === 'reading' ? item.title : writingPreview(item);
         const done = progress(item); const badge = document.createElement('em'); badge.textContent = done; badge.hidden = !done;
         b.append(meta, name, badge);
-        if (kind === 'writing' && item.images?.length) { const img = document.createElement('img'); img.className = 'library-thumb'; img.src = item.images[0]; img.alt = '題目圖表縮圖'; img.loading = 'lazy'; b.append(img); }
+        if (kind === 'writing' && item.images?.length) { const img = document.createElement('img'); img.className = 'library-thumb'; img.alt = '題目圖表縮圖'; img.loading = 'lazy'; img.addEventListener('error', () => { if (img.dataset.fallback) { img.alt = '圖表暫時無法載入'; return; } img.dataset.fallback = '1'; img.src = item.images[0]; }); img.src = optimizedTaskImage(item.images[0]); b.append(img); }
         b.addEventListener('click', () => { $('library').close(); $('material').value = item.id; $('material').dispatchEvent(new Event('change')); });
         section.append(b);
       }
