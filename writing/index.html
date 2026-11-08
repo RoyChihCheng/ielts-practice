@@ -6,21 +6,26 @@
 <title>寫作練習 | IELTS Practice Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Serif+TC:wght@600;700&display=swap">
-<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="../style.css?v=20261108a">
 </head>
 <body data-kind="writing">
 <header class="exam-bar">
   <a class="brand" href="../" title="回首頁"><b>IELTS</b><span>Writing</span></a>
   <button id="libraryBtn" class="library-btn" type="button">題庫</button>
-  <select id="material" aria-label="選擇寫作題目"><option value="">選擇寫作題目…</option></select>
+  <select id="practiceMode" aria-label="練習模式"><option value="study">練習模式</option><option value="exam">考試模式</option></select>
+  <button id="chooseWriting" type="button" aria-haspopup="dialog">選擇寫作題目・查看題型與主題</button>
+  <select id="material" hidden aria-label="選擇寫作題目"><option value="">選擇寫作題目…</option></select>
   <div class="timer-box"><span id="clock" class="clock" role="timer" aria-label="剩餘時間">20:00</span><button id="timer" type="button">開始計時</button></div>
   <label class="size"><span>字級</span><select id="fontsize" aria-label="文字大小"><option value="20">標準</option><option value="24">大</option><option value="28" selected>特大</option><option value="32">最大</option><option value="40">超大</option></select></label>
   <details class="more"><summary>工具</summary><div class="more-menu">
     <a href="../">← 首頁</a><a href="../reading/">閱讀練習 →</a>
     <label>練習名稱 <input id="attempt" maxlength="80" placeholder="預設" title="同一題可使用不同名稱分開保存作答"></label>
+    <label>計時方式<select id="timerMode"><option value="standard">建議時間</option><option value="free">不限時</option><option value="custom">自訂時間</option></select></label>
+    <label id="customTimeLabel" hidden>自訂分鐘數<input id="customTime" type="number" min="1" max="300" value="40"></label>
+    <label><span><input id="lockOnTimeout" type="checkbox"> 時間到鎖定作答</span></label>
     <button id="resetTimer" type="button">重設計時</button>
     <button id="downloadText" type="button">下載文字</button>
-    <button id="download" type="button" class="primary">下載備份</button>
+    <button id="download" type="button" class="primary">下載 Word 文件</button>
     <label class="upload">還原備份<input class="file-input" id="restore" type="file" accept="application/json,.json"></label>
     <label class="upload">開啟其他 PDF<input class="file-input" id="pdf" type="file" accept="application/pdf,.pdf"></label>
   </div></details>
@@ -38,6 +43,7 @@
       <label class="notes-label" for="notesText">隨手筆記</label>
       <textarea id="notesText" rows="4" placeholder="構想、論點、可用的句型與單字…"></textarea>
       <h3>畫重點與註記</h3>
+      <label class="note-filter">顏色 <select id="noteFilter"><option value="all">全部</option><option value="yellow">黃色</option><option value="green">綠色</option><option value="pink">粉紅色</option><option value="blue">藍色</option></select></label>
       <div id="marksList" class="marks-list"></div>
       <button id="downloadNotes" type="button" class="primary download-notes">下載筆記</button>
     </aside>
@@ -45,11 +51,14 @@
   <div id="splitter" class="splitter" role="separator" aria-label="拖曳調整題目與作答區寬度" aria-orientation="vertical" tabindex="0"></div>
   <section class="pane work" aria-label="作答區">
     <div class="tabs" aria-label="選擇寫作任務"><button id="task1" type="button" class="active" aria-pressed="true">Task 1</button><button id="task2" type="button" aria-pressed="false">Task 2</button></div>
-    <textarea class="editor" id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" aria-label="寫作作答"></textarea>
+    <div class="editor-toolbar" role="toolbar" aria-label="文字格式">
+      <span>格式</span><button type="button" data-format="bold" title="粗體（Ctrl+B）" aria-label="粗體"><b>B</b></button><button type="button" data-format="italic" title="斜體（Ctrl+I）" aria-label="斜體"><i>I</i></button><button type="button" data-format="underline" title="底線（Ctrl+U）" aria-label="底線"><u>U</u></button><small>選取文字後設定格式</small>
+    </div>
+    <div class="editor" id="editor" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false" autocorrect="off" autocapitalize="off" aria-label="寫作作答"></div>
     <div id="wcbar" class="wcbar" aria-hidden="true"></div>
     <div class="stats"><span id="wordcount">Word count: 0</span><span id="target"></span></div>
     <p id="status" class="status" role="status"></p>
-    <p class="notice">作答自動保存在此瀏覽器。換裝置或清除瀏覽器資料前，請從「工具」下載備份。</p>
+    <p class="notice">作答自動保存在此瀏覽器；Word 文件供閱讀與保存，無法還原作答。</p>
   </section>
 </main>
 <div id="hlbar" class="hlbar" hidden role="toolbar" aria-label="螢光筆">
@@ -57,10 +66,13 @@
 </div>
 <dialog id="library" class="library" aria-label="題庫">
   <div class="library-head"><h2>寫作題庫</h2><input id="librarySearch" type="search" placeholder="搜尋題目或週次，例如 week 8、maps" aria-label="搜尋題目"><button id="libraryClose" type="button" aria-label="關閉">✕</button></div>
+  <div class="library-filters"><label>任務<select id="filterTask"><option value="">全部 Task</option><option value="1">Task 1</option><option value="2">Task 2</option></select></label><label>題型<select id="filterType"><option value="">全部題型</option></select></label><label>主題<select id="filterTopic"><option value="">全部主題</option></select></label><label>教材<select id="filterSource"><option value="">全部教材</option></select></label></div>
   <div id="libraryList" class="library-list"></div>
 </dialog>
 <script src="../practice-data.js"></script>
-<script src="../shared.js"></script>
-<script src="../app.js"></script>
+<script src="../shared.js?v=20261108a"></script>
+<script src="../vendor/docx.iife.js"></script>
+<script src="../export-docx.js?v=20261108a"></script>
+<script src="../app.js?v=20261108a"></script>
 </body>
 </html>
