@@ -394,7 +394,7 @@
   // ── Answer checking ──────────────────────────────────────
   // Lenient on form (case, spaces, "1,000", hyphens, T/F/NG shorthands), strict on content: the key's alternatives decide.
   const TFNG = { t: 'true', true: 'true', f: 'false', false: 'false', ng: 'not given', 'not given': 'not given', y: 'yes', yes: 'yes', n: 'no', no: 'no' };
-  const norm = s => s.normalize('NFKC').toLowerCase().replace(/[‘’`]/g, "'").replace(/(\d),(?=\d{3}\b)/g, '$1').replace(/[.,;:!?"]+$/, '').replace(/\s+/g, ' ').trim();
+  const norm = s => s.normalize('NFKC').toLowerCase().replace(/[‘’`]/g, "'").replace(/(\d),(?=\d{3}\b)/g, '$1').trim().replace(/[.,;:!?"]+$/, '').replace(/\s+/g, ' ').trim();
   function matches(answer, keys) {
     const tf = keys.some(k => ['TRUE', 'FALSE', 'NOT GIVEN', 'YES', 'NO'].includes(k));
     const given = tf ? (TFNG[norm(answer)] || norm(answer)) : norm(answer);
