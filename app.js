@@ -763,7 +763,20 @@
     setView('text');
   }
 
-  for (const group of [...new Set(materials.map(materialGroup))]) {
+  const groupRank = g => {
+    const m = g.match(/^Cambridge IELTS (\d+)$/);
+    if (m) return [0, Number(m[1]), g];
+    if (g === 'IELTS Trainer 2') return [1, 0, g];
+    if (g === 'Cambridge 20 / Trainer 2') return [1, 1, g];
+    if (g === 'Official Guide') return [2, 0, g];
+    return [3, 0, g];
+  };
+  const compareGroups = (a, b) => {
+    const [ra, na, sa] = groupRank(a), [rb, nb, sb] = groupRank(b);
+    return ra - rb || na - nb || sa.localeCompare(sb);
+  };
+
+  for (const group of [...new Set(materials.map(materialGroup))].sort(compareGroups)) {
     const options = document.createElement('optgroup'); options.label = group;
     for (const item of materials.filter(entry => materialGroup(entry) === group)) {
       const option = document.createElement('option'); option.value = item.id;
@@ -867,7 +880,7 @@
   function renderLibrary() {
     const query = $('librarySearch').value.trim().toLowerCase(), list = $('libraryList'); list.replaceChildren();
     const groupFor = item => kind === 'reading' ? materialGroup(item) : writingType(item);
-    for (const group of [...new Set(materials.map(groupFor))]) {
+    for (const group of [...new Set(materials.map(groupFor))].sort((a, b) => kind === 'reading' ? compareGroups(a, b) : a.localeCompare(b))) {
       const items = materials.filter(item => groupFor(item) === group && (kind !== 'writing' || ((!$('filterTask').value || String(item.task) === $('filterTask').value) && (!$('filterType').value || writingType(item) === $('filterType').value) && (!$('filterTopic').value || writingTopic(item) === $('filterTopic').value) && (!$('filterSource').value || item.group === $('filterSource').value))) && (!query || `${item.label} ${item.title} ${item.group} ${item.group.replace(/\bIELTS\s+/i, '')} ${item.test ? `test ${item.test}` : ''} ${group} ${kind === 'writing' ? writingTopic(item) : ''} ${(item.prompt || []).join(' ')} week ${item.week} ${kind === 'reading' ? readingReference(item) : ''}`.replace(/[·•]/g, ' ').replace(/\s+/g, ' ').toLowerCase().includes(query)));
       if (!items.length) continue;
       const section = document.createElement('section'); const h = document.createElement('h3'); h.textContent = group; section.append(h);
@@ -886,8 +899,8 @@
     if (!list.children.length) list.textContent = '找不到符合的題目。';
   }
   if (kind === 'writing') {
-    for (const [id, values] of [['filterType', materials.map(writingType)], ['filterTopic', materials.map(writingTopic)], ['filterSource', materials.map(item => item.group)]]) {
-      [...new Set(values)].sort().forEach(value => { const option = document.createElement('option'); option.value = value; option.textContent = value; $(id).append(option); });
+    for (const [id, values, sorter] of [['filterType', materials.map(writingType), (a, b) => a.localeCompare(b)], ['filterTopic', materials.map(writingTopic), (a, b) => a.localeCompare(b)], ['filterSource', materials.map(item => item.group), compareGroups]]) {
+      [...new Set(values)].sort(sorter).forEach(value => { const option = document.createElement('option'); option.value = value; option.textContent = value; $(id).append(option); });
     }
     for (const id of ['filterTask', 'filterType', 'filterTopic', 'filterSource']) $(id).addEventListener('change', renderLibrary);
   }
