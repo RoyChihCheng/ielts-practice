@@ -114,12 +114,21 @@
     '1-R-7-1': 6, '1-R-8-2': 6, '1-R-8-3': 6
   };
   function readingReference(item) {
-    if (item.id.startsWith('21-R-')) return `Cambridge 21 · Test ${item.test}`;
+    const cam = item.id.match(/^(17|18|19|21)-R-/);
+    if (cam) return `Cambridge ${cam[1]} · Test ${item.test}`;
     if (item.id === '1-R-4-3') return 'Trainer 2 General Training · Test 3';
     if (/^0-R-(?:[5-9]|1[0-2])-[123]$/.test(item.id)) return `Official Guide · Test ${item.week - 4}`;
     if (/^1-R-(?:9|1[0-2])-[123]$/.test(item.id)) return `Cambridge 20 · Test ${item.week - 8}`;
     if (trainerTests[item.id]) return `Trainer 2 · Test ${trainerTests[item.id]}`;
     return `講義第 ${item.week} 週（原書回次未確認）`;
+  }
+
+  function materialGroup(item) {
+    if (kind !== 'reading' || item.group !== 'Cambridge 20 / Trainer 2') return item.group;
+    const reference = readingReference(item);
+    if (reference.startsWith('Cambridge 20 ·')) return 'Cambridge IELTS 20';
+    if (reference.startsWith('Trainer 2')) return 'IELTS Trainer 2';
+    return 'Cambridge 20 / Trainer 2（來源待確認）';
   }
 
   // Reading: answer boxes are placed inline in the question text, like the computer-delivered test.
@@ -754,9 +763,9 @@
     setView('text');
   }
 
-  for (const group of [...new Set(materials.map(item => item.group))]) {
+  for (const group of [...new Set(materials.map(materialGroup))]) {
     const options = document.createElement('optgroup'); options.label = group;
-    for (const item of materials.filter(entry => entry.group === group)) {
+    for (const item of materials.filter(entry => materialGroup(entry) === group)) {
       const option = document.createElement('option'); option.value = item.id;
       const label = kind === 'reading' && item.label === item.label.toUpperCase() ? item.label.toLowerCase().replace(/^\p{L}/u, c => c.toUpperCase()) : item.label;
       option.textContent = kind === 'reading' ? `${readingReference(item)} · ${label}` : label; options.append(option);
@@ -857,9 +866,9 @@
   }
   function renderLibrary() {
     const query = $('librarySearch').value.trim().toLowerCase(), list = $('libraryList'); list.replaceChildren();
-    const groupFor = item => kind === 'reading' ? item.group : writingType(item);
+    const groupFor = item => kind === 'reading' ? materialGroup(item) : writingType(item);
     for (const group of [...new Set(materials.map(groupFor))]) {
-      const items = materials.filter(item => groupFor(item) === group && (kind !== 'writing' || ((!$('filterTask').value || String(item.task) === $('filterTask').value) && (!$('filterType').value || writingType(item) === $('filterType').value) && (!$('filterTopic').value || writingTopic(item) === $('filterTopic').value) && (!$('filterSource').value || item.group === $('filterSource').value))) && (!query || `${item.label} ${item.title} ${item.group} ${group} ${kind === 'writing' ? writingTopic(item) : ''} ${(item.prompt || []).join(' ')} week ${item.week} ${kind === 'reading' ? readingReference(item) : ''}`.toLowerCase().includes(query)));
+      const items = materials.filter(item => groupFor(item) === group && (kind !== 'writing' || ((!$('filterTask').value || String(item.task) === $('filterTask').value) && (!$('filterType').value || writingType(item) === $('filterType').value) && (!$('filterTopic').value || writingTopic(item) === $('filterTopic').value) && (!$('filterSource').value || item.group === $('filterSource').value))) && (!query || `${item.label} ${item.title} ${item.group} ${item.group.replace(/\bIELTS\s+/i, '')} ${item.test ? `test ${item.test}` : ''} ${group} ${kind === 'writing' ? writingTopic(item) : ''} ${(item.prompt || []).join(' ')} week ${item.week} ${kind === 'reading' ? readingReference(item) : ''}`.replace(/[·•]/g, ' ').replace(/\s+/g, ' ').toLowerCase().includes(query)));
       if (!items.length) continue;
       const section = document.createElement('section'); const h = document.createElement('h3'); h.textContent = group; section.append(h);
       for (const item of items) {
