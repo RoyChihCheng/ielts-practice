@@ -140,7 +140,8 @@
   function updateCount() {
     const buttons = [...document.querySelectorAll('#qnav button[data-q]')];
     const done = buttons.filter(b => b.classList.contains('answered')).length;
-    $('qcount').textContent = buttons.length ? `${currentQ ? `第 ${currentQ} 題 · ` : ''}已答 ${done}/${buttons.length} · 未答 ${buttons.length - done}` : '';
+    $('qcount').textContent = buttons.length ? `${currentQ ? `Q${currentQ} · ` : ''}${done}/${buttons.length}` : '';
+    $('qcount').title = buttons.length ? `已答 ${done} 題 · 未答 ${buttons.length - done} 題` : '';
   }
   function answerInput(n) {
     const input = document.createElement('input');
@@ -565,6 +566,7 @@
     for (const image of activeItem.images || []) parent.append(taskImage(image));
     if (kind === 'writing') $('viewFigure').hidden = !parent.querySelector('.task-image-frame, table');
     applyMarks();
+    if (kind === 'reading' && showDifficulty && $('practiceMode').value !== 'exam') applyDifficulty();
     view.scrollTop = 0;
   }
   function setView(mode) {
@@ -600,11 +602,121 @@
     refreshInlineNotes();
   }
   const blocks = (area = 'passage') => area === 'question' ? [...$('questionText').children] : [...$('textView').children];
-  function cleanText(fragment) { fragment.querySelectorAll('button, input, .key-answer').forEach(el => el.remove()); return fragment.textContent; }
+  const TYPE_LABEL = { vocab: '詞彙', morph: '字根拆解', trap: '易混淆／多義', phrase: '關鍵片語' };
+  let showDifficulty = false;
+  function hideDiffTip() { if ($('diffTip')) $('diffTip').hidden = true; }
+  function showDiffTip(anchor, data) {
+    const tip = $('diffTip'); if (!tip) return;
+    tip.replaceChildren(
+      el('div', 'diff-tip-head', el('b', '', data.term), el('span', 'diff-tip-tag', TYPE_LABEL[data.type] || '難點')),
+      el('div', 'diff-tip-zh', data.gloss),
+      data.detail ? el('div', 'diff-tip-detail', data.detail) : ''
+    );
+    const tag = tip.querySelector('.diff-tip-tag'); if (tag) tag.dataset.type = data.type || 'vocab';
+    tip.hidden = false;
+    const r = anchor.getBoundingClientRect();
+    const top = r.bottom + 8 + tip.offsetHeight > innerHeight - 8 ? Math.max(8, r.top - tip.offsetHeight - 8) : r.bottom + 8;
+    tip.style.top = `${top}px`;
+    tip.style.left = `${Math.max(8, Math.min(innerWidth - tip.offsetWidth - 8, r.left))}px`;
+  }
+  function lookupVocab(word) {
+    const vocab = window.ieltsReadingNotes?.vocab; if (!vocab) return null;
+    const w = word.toLowerCase();
+    const variants = [w];
+    if (w.endsWith('ise')) variants.push(w.slice(0, -3) + 'ize');
+    if (w.endsWith('ised')) variants.push(w.slice(0, -4) + 'ized', w.slice(0, -4) + 'ize');
+    if (w.endsWith('ising')) variants.push(w.slice(0, -5) + 'izing', w.slice(0, -5) + 'ize');
+    for (const suf of ['s', 'es', 'ed', 'd', 'ing', 'ly', 'er', 'est']) {
+      if (w.endsWith(suf) && w.length > suf.length + 2) {
+        const stem = w.slice(0, -suf.length);
+        variants.push(stem, stem + 'e');
+      }
+    }
+    if (w.endsWith('ies') && w.length > 4) variants.push(w.slice(0, -3) + 'y');
+    if (w.endsWith('ied') && w.length > 4) variants.push(w.slice(0, -3) + 'y');
+    for (const key of variants) if (vocab[key]) return { term: word, gloss: vocab[key][0], detail: vocab[key][2], type: 'vocab', key };
+    return null;
+  }
+  function applyDifficulty() {
+    const notes = window.ieltsReadingNotes; if (!notes || !activeItem) return;
+    const curated = [...(notes.passages?.[activeItem.id] || [])].sort((a, b) => b.term.length - a.term.length);
+    const seen = new Set();
+    const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const makeNode = (text, info) => {
+      const word = document.createElement('span'); word.className = 'diff-word'; word.textContent = text;
+      word.dataset.type = info.type || 'vocab'; word.tabIndex = 0;
+      word._diffInfo = { term: text, gloss: info.gloss, detail: info.detail || '', type: info.type || 'vocab' };
+      const gloss = document.createElement('span'); gloss.className = 'diff-gloss'; gloss.dataset.type = info.type || 'vocab';
+      gloss.setAttribute('aria-hidden', 'true'); gloss.textContent = info.gloss;
+      gloss._diffInfo = word._diffInfo;
+      const frag = document.createDocumentFragment(); frag.append(word, gloss); return frag;
+    };
+    const walkBlock = (block, fn) => {
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, {
+        acceptNode: n => n.parentElement?.closest('.diff-word, .diff-gloss, button, .key-answer') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+      });
+      const list = []; for (let n = walker.nextNode(); n; n = walker.nextNode()) list.push(n);
+      for (const n of list) fn(n);
+    };
+    for (const block of $('textView').querySelectorAll('p:not(.passage-label):not(.passage-intro), td')) {
+      const bText = block.textContent;
+      const applicable = curated.filter(r => (!r.para || bText.includes(r.para)) && !seen.has(`${r.term.toLowerCase()}@${r.para || ''}`));
+      if (applicable.length) {
+        const rx = new RegExp(applicable.map(r => `(?<![A-Za-z])${esc(r.term)}(?![A-Za-z])`).join('|'), 'g');
+        walkBlock(block, node => {
+          const txt = node.data; let last = 0, frag = null;
+          for (const m of txt.matchAll(rx)) {
+            const rule = applicable.find(r => r.term.toLowerCase() === m[0].toLowerCase() && !seen.has(`${r.term.toLowerCase()}@${r.para || ''}`));
+            if (!rule) continue;
+            seen.add(`${rule.term.toLowerCase()}@${rule.para || ''}`);
+            seen.add(rule.term.toLowerCase());
+            if (!frag) frag = document.createDocumentFragment();
+            if (m.index > last) frag.append(txt.slice(last, m.index));
+            frag.append(makeNode(m[0], rule));
+            last = m.index + m[0].length;
+          }
+          if (frag) { if (last < txt.length) frag.append(txt.slice(last)); node.replaceWith(frag); }
+        });
+      }
+      walkBlock(block, node => {
+        const txt = node.data; let last = 0, frag = null;
+        for (const m of txt.matchAll(/\b[A-Za-z]{4,}(?:-[A-Za-z]{2,})?\b/g)) {
+          const hit = lookupVocab(m[0]);
+          if (!hit || seen.has(hit.key)) continue;
+          seen.add(hit.key);
+          if (!frag) frag = document.createDocumentFragment();
+          if (m.index > last) frag.append(txt.slice(last, m.index));
+          frag.append(makeNode(m[0], hit));
+          last = m.index + m[0].length;
+        }
+        if (frag) { if (last < txt.length) frag.append(txt.slice(last)); node.replaceWith(frag); }
+      });
+    }
+  }
+  if (kind === 'reading') {
+    $('difficultyBtn').addEventListener('click', () => {
+      if (!activeItem) return;
+      showDifficulty = !showDifficulty;
+      $('difficultyBtn').classList.toggle('active', showDifficulty);
+      $('difficultyBtn').setAttribute('aria-pressed', String(showDifficulty));
+      hideDiffTip();
+      const y = $('textView').scrollTop; showText(); $('textView').scrollTop = y;
+    });
+    $('textView').addEventListener('click', e => {
+      const target = e.target.closest('.diff-word, .diff-gloss');
+      if (!target || !getSelection().isCollapsed) return;
+      if (target._diffInfo) showDiffTip(target, target._diffInfo);
+    });
+    $('textView').addEventListener('scroll', hideDiffTip);
+    document.addEventListener('mousedown', e => { if (!e.target.closest('#diffTip, .diff-word, .diff-gloss')) hideDiffTip(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') hideDiffTip(); });
+  }
+
+  function cleanText(fragment) { fragment.querySelectorAll('button, input, .key-answer, .diff-gloss').forEach(el => el.remove()); return fragment.textContent; }
   function blockText(block) { return cleanText(block.cloneNode(true)); }
   function offsetIn(block, node, offset) { const r = document.createRange(); r.setStart(block, 0); r.setEnd(node, offset); return cleanText(r.cloneContents()).length; }
   function wrap(block, start, end, mark) {
-    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, { acceptNode: node => node.parentElement?.closest('button, .key-answer') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT }); const parts = []; let pos = 0;
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, { acceptNode: node => node.parentElement?.closest('button, .key-answer, .diff-gloss') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT }); const parts = []; let pos = 0;
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       const len = node.data.length, a = Math.max(start, pos), b = Math.min(end, pos + len);
       if (a < b) parts.push([node, a - pos, b - pos]);
@@ -744,15 +856,17 @@
 
   function setBanner(title, hint) { $('partTitle').textContent = title; $('partHint').textContent = hint; }
   function loadText(item) {
-    activeItem = item; checking = false; hideBar();
+    activeItem = item; checking = false; hideBar(); hideDiffTip();
     if (kind === 'reading') {
       $('checkBtn').textContent = '對答案'; $('checkBtn').classList.remove('active');
       $('reviewBtn').disabled = false;
+      $('difficultyBtn').disabled = false;
       $('checkBtn').disabled = !item.answers; $('checkBtn').title = item.answers ? '核對答案（可再按一次隱藏）' : '這份講義沒有附答案';
       buildQuestions(item);
       const count = item.end - item.start + 1;
       setLimit(Math.ceil(count / 14) * 20);
-      setBanner(`Questions ${item.start}–${item.end}`, `正文約 ${passageWords(item)} 字（不含標題、副標） · 建議 ${limit / 60} 分鐘 · 文章與題目均可畫記`);
+      setBanner(`Q${item.start}–${item.end}`, `約 ${passageWords(item)} 字 · ${limit / 60} 分鐘`);
+      $('filename').hidden = true;
     } else {
       task = item.task === 1 ? 'task1' : 'task2';
       document.querySelector('.tabs').hidden = true;
@@ -919,7 +1033,7 @@
     if (!canSwitch()) { e.target.value = ''; return; }
     if (pdfUrl) URL.revokeObjectURL(pdfUrl);
     pdfUrl = URL.createObjectURL(file); showPdf(pdfUrl, file.name); $('material').value = ''; activeItem = null; checking = false;
-    if (kind === 'reading') { buildQuestions(null); $('checkBtn').disabled = true; } else document.querySelector('.tabs').hidden = false;
+    if (kind === 'reading') { buildQuestions(null); $('checkBtn').disabled = true; $('difficultyBtn').disabled = true; showDifficulty = false; $('difficultyBtn').classList.remove('active'); $('difficultyBtn').setAttribute('aria-pressed', 'false'); hideDiffTip(); $('filename').hidden = false; } else document.querySelector('.tabs').hidden = false;
     setLimit(60); setBanner('自選 PDF', '依講義題號作答。');
     setView('pdf');
     setMaterialKey(`ielts-${kind}-${file.name}-${file.size}-${file.lastModified}`); e.target.value = '';
@@ -953,7 +1067,8 @@
   $('customTime').addEventListener('change', resetTimer);
   $('practiceMode').addEventListener('change', () => {
     const exam = $('practiceMode').value === 'exam'; document.body.classList.toggle('exam-mode', exam);
-    if (exam) { $('notesPanel').hidden = true; $('notesBtn').classList.remove('active'); hideBar(); if (kind === 'reading') { checking = false; revealedQuestions.clear(); clearResults(); $('checkBtn').textContent = '對答案'; $('checkBtn').classList.remove('active'); updateCount(); } }
+    if (exam) { $('notesPanel').hidden = true; $('notesBtn').classList.remove('active'); hideBar(); hideDiffTip(); if (kind === 'reading') { checking = false; revealedQuestions.clear(); clearResults(); $('checkBtn').textContent = '對答案'; $('checkBtn').classList.remove('active'); updateCount(); } }
+    else if (kind === 'reading' && activeItem && showDifficulty) { const y = $('textView').scrollTop; showText(); $('textView').scrollTop = y; }
     $('status').textContent = exam ? '考試模式：隱藏提示與格式工具；此模式僅模擬練習，不代表正式考試介面。' : '練習模式：可使用筆記、格式與答案回顧。';
   });
   resetTimer();

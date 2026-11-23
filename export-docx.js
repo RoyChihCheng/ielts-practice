@@ -11,7 +11,7 @@ window.exportPracticeDocx = async function ({ kind, item, source, drafts, task, 
   async function walk(node, style = {}) {
     if (node.nodeType === Node.TEXT_NODE) { if (node.data) runs.push(new TextRun({ text: node.data.replace(/\u2028/g, ' '), ...style })); return; }
     if (node.nodeType !== Node.ELEMENT_NODE) return;
-    if (node.matches('button, .key-answer, .check-one')) return;
+    if (node.matches('button, .key-answer, .check-one, .diff-gloss')) return;
     if (node.tagName === 'INPUT') { runs.push(new TextRun({ text: ` [${node.value || '　'}] ` })); return; }
     if (node.tagName === 'BR') { runs.push(new TextRun({ break: 1 })); return; }
     if (node.tagName === 'IMG') {

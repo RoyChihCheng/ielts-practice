@@ -6,7 +6,7 @@
 <title>閱讀練習 | IELTS Practice Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Serif+TC:wght@600;700&display=swap">
-<link rel="stylesheet" href="../style.css?v=20261108b">
+<link rel="stylesheet" href="../style.css?v=20261123a">
 </head>
 <body data-kind="reading">
 <header class="exam-bar">
@@ -23,15 +23,16 @@
     <label id="customTimeLabel" hidden>自訂分鐘數<input id="customTime" type="number" min="1" max="300" value="20"></label>
     <label><span><input id="lockOnTimeout" type="checkbox"> 時間到鎖定作答</span></label>
     <button id="resetTimer" type="button">重設計時</button>
+    <button id="reviewBtn" type="button" disabled>作答回顧</button>
     <button id="download" type="button" class="primary">下載 Word 文件</button>
     <label class="upload">還原備份<input class="file-input" id="restore" type="file" accept="application/json,.json"></label>
     <label class="upload">開啟其他 PDF<input class="file-input" id="pdf" type="file" accept="application/pdf,.pdf"></label>
+    <small class="menu-note">作答自動保存在此瀏覽器；Word 僅供閱讀保存，無法還原作答。</small>
   </div></details>
 </header>
-<div class="part-banner"><strong id="partTitle">Reading</strong><span id="partHint">從「題庫」選擇文章後開始作答。</span><small id="filename"></small></div>
 <main class="layout">
   <section class="pane document" aria-label="閱讀文章">
-    <div class="view-controls"><button id="viewText" type="button" class="active">文章</button><button id="viewPdf" type="button">原始 PDF</button><button id="notesBtn" type="button" title="筆記、畫重點與下載">筆記</button><button id="focus" type="button" aria-pressed="false">專注閱讀</button></div>
+    <div class="view-controls"><button id="viewText" type="button" class="active">文章</button><button id="viewPdf" type="button">原始 PDF</button><button id="notesBtn" type="button" title="筆記、畫重點與下載">筆記</button><button id="difficultyBtn" type="button" aria-pressed="false" disabled title="顯示學生容易卡住的單字、字根拆解與中文註解">顯示閱讀難點</button><button id="focus" type="button" aria-pressed="false">專注閱讀</button><span class="part-inline"><strong id="partTitle">Reading</strong><span id="partHint">從「題庫」選文開始</span><small id="filename" hidden></small></span></div>
     <div class="empty" id="empty"><span class="empty-mark">R</span><strong>準備好開始了嗎？</strong><p>文章顯示在左側，題目和作答格在右側。選取文字就會出現螢光筆，可畫重點、寫註記，最後一鍵對答案。</p><button id="emptyLibrary" type="button" class="primary">開啟題庫</button></div>
     <article id="textView" class="text-view" hidden></article>
     <iframe id="viewer" title="閱讀講義 PDF" hidden></iframe>
@@ -50,10 +51,10 @@
     <div id="questionText" class="question-text"><p class="placeholder">選擇文章後，題目與作答格會出現在這裡。</p></div>
     <div id="answers" class="answers"></div>
     <p id="status" class="status" role="status"></p>
-    <p class="notice">作答自動保存在此瀏覽器；Word 文件供閱讀與保存，無法還原作答。</p>
   </section>
 </main>
-<footer class="qbar"><button id="prevQ" type="button" aria-label="上一題">‹</button><nav id="qnav" class="qnav" aria-label="題號導覽"></nav><button id="nextQ" type="button" aria-label="下一題">›</button><span id="qcount" class="qcount"></span><button id="reviewBtn" type="button" class="review-btn" disabled>作答回顧</button><button id="checkBtn" type="button" class="check-btn" disabled>對答案</button></footer>
+<footer class="qbar"><button id="prevQ" type="button" aria-label="上一題">‹</button><nav id="qnav" class="qnav" aria-label="題號導覽"></nav><button id="nextQ" type="button" aria-label="下一題">›</button><span id="qcount" class="qcount"></span><button id="checkBtn" type="button" class="check-btn" disabled>對答案</button></footer>
+<div id="diffTip" class="diff-tip" hidden role="dialog" aria-label="閱讀難點解析"></div>
 <div id="hlbar" class="hlbar" hidden role="toolbar" aria-label="螢光筆">
   <button type="button" data-color="yellow" class="sw sw-yellow" aria-label="黃色螢光筆"></button><button type="button" data-color="green" class="sw sw-green" aria-label="綠色螢光筆"></button><button type="button" data-color="pink" class="sw sw-pink" aria-label="粉紅色螢光筆"></button><button type="button" data-color="blue" class="sw sw-blue" aria-label="藍色螢光筆"></button><button type="button" data-action="note" class="hl-note">註記</button><button type="button" data-action="remove" class="hl-remove">移除</button>
 </div>
@@ -64,9 +65,10 @@
   <div id="libraryList" class="library-list"></div>
 </dialog>
 <script src="../practice-data.js"></script>
+<script src="../reading-notes.js?v=20261123a"></script>
 <script src="../shared.js?v=20261108a"></script>
 <script src="../vendor/docx.iife.js"></script>
-<script src="../export-docx.js?v=20261108a"></script>
-<script src="../app.js?v=20261108b"></script>
+<script src="../export-docx.js?v=20261123a"></script>
+<script src="../app.js?v=20261123a"></script>
 </body>
 </html>
