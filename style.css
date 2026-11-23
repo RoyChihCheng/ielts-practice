@@ -274,14 +274,6 @@ body[data-kind="reading"] .text-view .passage-label{margin:0 0 .25em}
 body[data-kind="reading"] .text-view .passage-intro{margin:0 0 .85em}
 body[data-kind="reading"] .work{padding:12px 16px}
 body[data-kind="reading"] .status,body[data-kind="writing"] .status{margin:6px 0 0;font-size:12px;min-height:1.2em}
-body[data-kind="writing"] .text-view{padding:8px 14px 12px;font-size:clamp(14px,calc(var(--font) * .58),19px);line-height:1.45}
-body[data-kind="writing"] .text-view h1{font-size:1.05em;margin:0 0 .35em}
-body[data-kind="writing"] .prompt-box{padding:.55em .85em;max-width:54em}
-body[data-kind="writing"] .prompt-box p{margin:0 0 .4em;max-width:54em}
-body[data-kind="writing"] .prompt-box p.prompt-meta{font-size:.86em;color:var(--muted)}
-body[data-kind="writing"] .task-image-frame{margin:.45em 0 0;padding-top:0;border-top:0;max-width:54em}
-body[data-kind="writing"] .task-image-frame:not(.loading):not(.failed) .figure-status{display:none}
-body[data-kind="writing"] .task-figure{max-height:max(260px,calc(100dvh - 420px));width:auto;max-width:100%;margin:.15em auto;cursor:zoom-in}
 body[data-kind="writing"] .work{display:flex;flex-direction:column;padding:10px 14px 12px;overflow:hidden}
 body[data-kind="writing"] .tabs{flex:none;margin-bottom:8px}
 body[data-kind="writing"] .editor-toolbar{flex:none}
@@ -290,13 +282,7 @@ body[data-kind="writing"] .wcbar,body[data-kind="writing"] .stats,body[data-kind
 @media(max-width:900px){
   body[data-kind="writing"] .work{overflow:visible}
   body[data-kind="writing"] .editor{flex:none;min-height:50vh}
-  body[data-kind="writing"] .task-figure{max-height:none}
 }
-.figure-zoom{width:min(1100px,96vw);max-width:96vw;max-height:92dvh;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 24px 60px #0f223359}
-.figure-zoom::backdrop{background:#0f223388}
-.figure-zoom-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font:600 14px var(--ui);color:var(--ink)}
-.figure-zoom-bar button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 10px}
-.figure-zoom img{display:block;max-width:100%;max-height:calc(92dvh - 64px);width:auto;height:auto;margin:auto}
 body[data-kind="reading"] .qbar{height:36px;padding:2px 8px;gap:5px}
 body[data-kind="reading"] .qbar>button{width:28px;height:28px;font-size:18px}
 body[data-kind="reading"] .qnav button{min-width:28px;height:28px;font-size:13px}

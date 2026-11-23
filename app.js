@@ -70,13 +70,7 @@
       frame.classList.remove('loading'); frame.classList.add('failed'); status.textContent = '圖表載入失敗，請檢查網路後重試。'; retry.hidden = false; original.hidden = false;
     });
     retry.addEventListener('click', () => { fallback = true; frame.classList.remove('failed'); frame.classList.add('loading'); status.textContent = '題目圖表重新載入中…'; retry.hidden = true; original.hidden = true; const src = new URL(url, location.href); src.searchParams.set('retry', Date.now()); img.src = src.href; });
-    frame.classList.add('loading'); frame.append(status, img, retry, original); img.src = optimizedTaskImage(url);
-    img.addEventListener('click', () => {
-      const dialog = $('figureZoom'); if (!dialog) return;
-      $('figureZoomImg').src = img.currentSrc || url;
-      dialog.showModal();
-    });
-    return frame;
+    frame.classList.add('loading'); frame.append(status, img, retry, original); img.src = optimizedTaskImage(url); return frame;
   }
   function makeTable(line, fill) {
     const table = document.createElement('table'); table.className = 'q-table';
@@ -545,8 +539,6 @@
       if ($('notesPanel').hidden) { openNotes(); $('notesText').focus(); }
       else { $('notesPanel').hidden = true; $('notesBtn').classList.remove('active'); }
     });
-    $('figureZoomClose')?.addEventListener('click', () => $('figureZoom').close());
-    $('figureZoom')?.addEventListener('click', e => { if (e.target === $('figureZoom')) $('figureZoom').close(); });
     for (const id of ['task1', 'task2']) $(id).addEventListener('click', () => { task = id; render(); });
   }
   load();
@@ -594,14 +586,11 @@
       if (k === 0 && kind === 'reading' && content.startsWith(activeItem.title)) { p.className = 'subtitle'; p.append(rich(content.slice(activeItem.title.length).trim(), phrases)); parent.append(p); return; }
       const label = kind === 'reading' && content.match(/^([A-Z]|\d{1,2})\.\s+/);
       if (label) { const b = document.createElement('b'); b.className = 'para-label'; b.textContent = label[1]; p.append(b, rich(content.slice(label[0].length), phrases)); }
-      else {
-        if (kind === 'writing' && /^(?:You should spend|Write at least|Write about the following)/i.test(content)) p.className = 'prompt-meta';
-        p.append(rich(content, phrases));
-      }
+      else p.append(rich(content, phrases));
       parent.append(p);
     });
-    for (const image of activeItem.images || []) (kind === 'writing' ? view : parent).append(taskImage(image));
-    if (kind === 'writing') $('viewFigure').hidden = !view.querySelector('.task-image-frame, table');
+    for (const image of activeItem.images || []) parent.append(taskImage(image));
+    if (kind === 'writing') $('viewFigure').hidden = !parent.querySelector('.task-image-frame, table');
     applyMarks();
     if (kind === 'reading' && showDifficulty && $('practiceMode').value !== 'exam') applyDifficulty();
     view.scrollTop = 0;
