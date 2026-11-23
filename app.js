@@ -70,7 +70,13 @@
       frame.classList.remove('loading'); frame.classList.add('failed'); status.textContent = '圖表載入失敗，請檢查網路後重試。'; retry.hidden = false; original.hidden = false;
     });
     retry.addEventListener('click', () => { fallback = true; frame.classList.remove('failed'); frame.classList.add('loading'); status.textContent = '題目圖表重新載入中…'; retry.hidden = true; original.hidden = true; const src = new URL(url, location.href); src.searchParams.set('retry', Date.now()); img.src = src.href; });
-    frame.classList.add('loading'); frame.append(status, img, retry, original); img.src = optimizedTaskImage(url); return frame;
+    frame.classList.add('loading'); frame.append(status, img, retry, original); img.src = optimizedTaskImage(url);
+    img.addEventListener('click', () => {
+      const dialog = $('figureZoom'); if (!dialog) return;
+      $('figureZoomImg').src = img.currentSrc || url;
+      dialog.showModal();
+    });
+    return frame;
   }
   function makeTable(line, fill) {
     const table = document.createElement('table'); table.className = 'q-table';
@@ -504,7 +510,10 @@
     const editor = $('editor');
     function saveEditor() { drafts[task] = editor.innerText.replace(/\r\n/g, '\n'); drafts[`${task}Html`] = safeWritingHtml(editor.innerHTML); updateWordCount(); save(); }
     editor.addEventListener('input', saveEditor);
-    editor.addEventListener('keydown', e => { if ($('practiceMode').value === 'exam' && (e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) e.preventDefault(); });
+    editor.addEventListener('keydown', e => {
+      if (e.key === 'Tab' && !locked) { e.preventDefault(); document.execCommand('insertText', false, '    '); return; }
+      if ($('practiceMode').value === 'exam' && (e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) e.preventDefault();
+    });
     // Paste plain text to avoid hidden formatting, external resources and unsafe markup.
     editor.addEventListener('paste', e => { e.preventDefault(); document.execCommand('insertText', false, e.clipboardData.getData('text/plain')); });
     document.querySelectorAll('[data-format]').forEach(button => {
@@ -514,12 +523,37 @@
         editor.focus(); document.execCommand(button.dataset.format, false); saveEditor();
       });
     });
+    document.querySelectorAll('[data-edit]').forEach(button => {
+      button.addEventListener('mousedown', e => e.preventDefault());
+      button.addEventListener('click', () => {
+        if (locked) return;
+        editor.focus(); document.execCommand(button.dataset.edit, false); saveEditor();
+      });
+    });
+    $('copyEssay')?.addEventListener('click', async () => {
+      const text = drafts[task] || '';
+      if (!text.trim()) { $('status').textContent = '目前尚無內容可複製。'; return; }
+      try { await navigator.clipboard.writeText(text); $('status').textContent = '已複製目前作答全文。'; }
+      catch { $('status').textContent = '無法存取剪貼簿，請手動選取複製。'; }
+    });
+    $('clearEssay')?.addEventListener('click', () => {
+      if (locked) return;
+      if ((drafts[task] || '').trim() && !confirm('確定要清空目前的寫作內容嗎？')) return;
+      editor.textContent = ''; saveEditor(); $('status').textContent = '已清空目前作答。'; editor.focus();
+    });
+    $('outlineBtn')?.addEventListener('click', () => {
+      if ($('notesPanel').hidden) { openNotes(); $('notesText').focus(); }
+      else { $('notesPanel').hidden = true; $('notesBtn').classList.remove('active'); }
+    });
+    $('figureZoomClose')?.addEventListener('click', () => $('figureZoom').close());
+    $('figureZoom')?.addEventListener('click', e => { if (e.target === $('figureZoom')) $('figureZoom').close(); });
     for (const id of ['task1', 'task2']) $(id).addEventListener('click', () => { task = id; render(); });
   }
   load();
 
   const layout = document.querySelector('.layout');
   const splitter = $('splitter');
+  if (kind === 'writing') layout.style.setProperty('--left', '46%');
   try { const saved = Number(localStorage.getItem(`ielts-${kind}-split`)); if (saved >= 35 && saved <= 80) layout.style.setProperty('--left', `${saved}%`); } catch {}
   function setSplit(percent) {
     const value = Math.min(80, Math.max(35, percent));
@@ -560,11 +594,14 @@
       if (k === 0 && kind === 'reading' && content.startsWith(activeItem.title)) { p.className = 'subtitle'; p.append(rich(content.slice(activeItem.title.length).trim(), phrases)); parent.append(p); return; }
       const label = kind === 'reading' && content.match(/^([A-Z]|\d{1,2})\.\s+/);
       if (label) { const b = document.createElement('b'); b.className = 'para-label'; b.textContent = label[1]; p.append(b, rich(content.slice(label[0].length), phrases)); }
-      else p.append(rich(content, phrases));
+      else {
+        if (kind === 'writing' && /^(?:You should spend|Write at least|Write about the following)/i.test(content)) p.className = 'prompt-meta';
+        p.append(rich(content, phrases));
+      }
       parent.append(p);
     });
-    for (const image of activeItem.images || []) parent.append(taskImage(image));
-    if (kind === 'writing') $('viewFigure').hidden = !parent.querySelector('.task-image-frame, table');
+    for (const image of activeItem.images || []) (kind === 'writing' ? view : parent).append(taskImage(image));
+    if (kind === 'writing') $('viewFigure').hidden = !view.querySelector('.task-image-frame, table');
     applyMarks();
     if (kind === 'reading' && showDifficulty && $('practiceMode').value !== 'exam') applyDifficulty();
     view.scrollTop = 0;
@@ -838,7 +875,7 @@
   $('noteFilter').addEventListener('change', renderNotes);
   $('downloadNotes').addEventListener('click', () => {
     if (!activeItem) { $('status').textContent = '請先選擇題目。'; return; }
-    const lines = [`IELTS ${kind === 'reading' ? 'Reading' : 'Writing'} 筆記 — ${activeItem.title}`, `${activeItem.group} · Week ${activeItem.week} · 下載時間 ${new Date().toLocaleString('zh-TW')}`, ''];
+    const lines = [`IELTS ${kind === 'reading' ? 'Reading' : 'Writing'} 筆記 — ${activeItem.title}`, `${activeItem.group} · ${activeItem.test ? `Test ${activeItem.test}` : `Week ${activeItem.week}`} · 下載時間 ${new Date().toLocaleString('zh-TW')}`, ''];
     const groups = [...new Set(study.marks.map(m => m.id))];
     lines.push(`【畫重點與註記】${groups.length ? '' : '（無）'}`);
     groups.forEach((id, k) => { const parts = study.marks.filter(m => m.id === id); lines.push(`${k + 1}. 「${parts.map(m => m.text).join(' … ')}」（${COLORS[parts[0].color] || ''}色）`); if (parts[0].note) lines.push(`   註記：${parts[0].note}`); });
@@ -871,7 +908,7 @@
       task = item.task === 1 ? 'task1' : 'task2';
       document.querySelector('.tabs').hidden = true;
       setLimit(item.task === 1 ? 20 : 40);
-      setBanner(`Part ${item.task}`, `建議時間 ${limit / 60} 分鐘，至少寫 ${item.task === 1 ? 150 : 250} 字。`);
+      setBanner(`Part ${item.task}`, `${limit / 60} 分鐘 · 至少 ${item.task === 1 ? 150 : 250} 字`);
     }
     loadStudy();
     setView('text');
@@ -915,7 +952,7 @@
     const item = materials.find(entry => entry.id === e.target.value); if (!item) return;
     if (!canSwitch()) { e.target.value = ''; return; }
     if (pdfUrl) { URL.revokeObjectURL(pdfUrl); pdfUrl = null; }
-    showPdf(item.source, `${kind === 'reading' ? readingReference(item) : `${item.group} · Week ${item.week}`} · ${item.title}`); loadText(item);
+    showPdf(item.source, `${kind === 'reading' ? readingReference(item) : `${item.group} · ${item.test ? `Test ${item.test}` : `Week ${item.week}`}`} · ${item.title}`); loadText(item);
     if (kind === 'writing') { $('chooseWriting').textContent = `${writingType(item)} · ${writingPreview(item).slice(0, 60)}…`; $('chooseWriting').title = writingPreview(item); }
     setMaterialKey(`ielts-${kind}-question-${item.id}`);
     history.replaceState(null, '', `#${item.id}`);
@@ -940,9 +977,10 @@
       if (/\b(?:line charts?|line graphs?)\b/.test(text)) types.push('折線圖 Line graphs');
       if (/\btables?\b/.test(text)) types.push('表格 Tables');
       if (/\b(?:diagrams?|flowcharts?|life cycle)\b/.test(text) && !/\bfloor plan\b/.test(text)) types.push('流程／示意圖 Diagrams');
-      if (/\bgraphs?\b/.test(text) && !/\b(?:line|bar) graphs?\b/.test(text)) types.push('圖表 Graph（細類待確認）');
-      if (/\bcharts?\b/.test(text) && !/\b(?:pie|bar|line) charts?\b/.test(text) && !/flowcharts?/.test(text)) types.push('圖表 Chart（細類待確認）');
-      return `Task 1 · ${types.join(' ＋ ') || '圖表（類型待確認）'}`;
+      if (/\bgraphs?\b/.test(text) && !/\b(?:line|bar) graphs?\b/.test(text)) types.push('圖表 Graphs');
+      if (/\bcharts?\b/.test(text) && !/\b(?:pie|bar|line) charts?\b/.test(text) && !/flowcharts?/.test(text)) types.push('圖表 Charts');
+      if (types.length >= 2) return 'Task 1 · 混和圖表 Mixed charts';
+      return `Task 1 · ${types[0] || '圖表 Charts'}`;
     }
     if (/advantages?.{0,80}disadvantages?|disadvantages?.{0,80}advantages?|benefits?.{0,80}drawbacks?/s.test(text)) return 'Task 2 · 優缺點 Advantages & disadvantages';
     if (/discuss both|discuss these (?:two )?views/i.test(text)) return 'Task 2 · 雙邊討論 Discuss both views';

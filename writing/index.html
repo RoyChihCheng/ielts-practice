@@ -6,7 +6,7 @@
 <title>寫作練習 | IELTS Practice Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Serif+TC:wght@600;700&display=swap">
-<link rel="stylesheet" href="../style.css?v=20261108b">
+<link rel="stylesheet" href="../style.css?v=20261123b">
 </head>
 <body data-kind="writing">
 <header class="exam-bar">
@@ -28,12 +28,12 @@
     <button id="download" type="button" class="primary">下載 Word 文件</button>
     <label class="upload">還原備份<input class="file-input" id="restore" type="file" accept="application/json,.json"></label>
     <label class="upload">開啟其他 PDF<input class="file-input" id="pdf" type="file" accept="application/pdf,.pdf"></label>
+    <small class="menu-note">作答自動保存在此瀏覽器；Word 文件供閱讀與保存，無法還原作答。</small>
   </div></details>
 </header>
-<div class="part-banner"><strong id="partTitle">Writing</strong><span id="partHint">從「題庫」選擇題目後開始寫作。</span><small id="filename"></small></div>
 <main class="layout">
   <section class="pane document" aria-label="寫作題目">
-    <div class="view-controls"><button id="viewText" type="button" class="active">題目</button><button id="viewPdf" type="button">原始 PDF</button><button id="viewFigure" type="button" hidden>查看圖表 ↓</button><button id="notesBtn" type="button" title="筆記、畫重點與下載">筆記</button><button id="focus" type="button" aria-pressed="false">專注閱讀</button></div>
+    <div class="view-controls"><button id="viewText" type="button" class="active">題目</button><button id="viewPdf" type="button">原始 PDF</button><button id="viewFigure" type="button" hidden>查看圖表 ↓</button><button id="notesBtn" type="button" title="筆記、畫重點與下載">筆記</button><button id="focus" type="button" aria-pressed="false">專注看題</button><span class="part-inline"><strong id="partTitle">Writing</strong><span id="partHint">從「題庫」選題開始</span><small id="filename"></small></span></div>
     <div class="empty" id="empty"><span class="empty-mark">W</span><strong>開始你的寫作練習</strong><p>題目與圖表顯示在左側，右側為作答區；和電腦考一樣沒有拼字檢查。</p><button id="emptyLibrary" type="button" class="primary">開啟題庫</button></div>
     <article id="textView" class="text-view" hidden></article>
     <iframe id="viewer" title="寫作講義 PDF" hidden></iframe>
@@ -51,16 +51,16 @@
   <div id="splitter" class="splitter" role="separator" aria-label="拖曳調整題目與作答區寬度" aria-orientation="vertical" tabindex="0"></div>
   <section class="pane work" aria-label="作答區">
     <div class="tabs" aria-label="選擇寫作任務"><button id="task1" type="button" class="active" aria-pressed="true">Task 1</button><button id="task2" type="button" aria-pressed="false">Task 2</button></div>
-    <div class="editor-toolbar" role="toolbar" aria-label="文字格式">
-      <span>格式</span><button type="button" data-format="bold" title="粗體（Ctrl+B）" aria-label="粗體"><b>B</b></button><button type="button" data-format="italic" title="斜體（Ctrl+I）" aria-label="斜體"><i>I</i></button><button type="button" data-format="underline" title="底線（Ctrl+U）" aria-label="底線"><u>U</u></button><small>選取文字後設定格式</small>
+    <div class="editor-toolbar" role="toolbar" aria-label="寫作工具">
+      <span>格式</span><button type="button" data-format="bold" title="粗體（Ctrl+B）" aria-label="粗體"><b>B</b></button><button type="button" data-format="italic" title="斜體（Ctrl+I）" aria-label="斜體"><i>I</i></button><button type="button" data-format="underline" title="底線（Ctrl+U）" aria-label="底線"><u>U</u></button><span class="tb-sep" aria-hidden="true"></span><button type="button" data-edit="undo" class="tb-action" title="復原（Ctrl+Z）" aria-label="復原">↶ 復原</button><button type="button" data-edit="redo" class="tb-action" title="重做（Ctrl+Y）" aria-label="重做">↷ 重做</button><button id="outlineBtn" type="button" class="tb-action" title="開啟或關閉大綱隨手筆記">大綱筆記</button><button id="copyEssay" type="button" class="tb-action" title="複製目前作答全文">複製全文</button><button id="clearEssay" type="button" class="tb-action tb-danger" title="清空目前作答">清空</button>
     </div>
     <div class="editor" id="editor" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false" autocorrect="off" autocapitalize="off" aria-label="寫作作答"></div>
     <div id="wcbar" class="wcbar" aria-hidden="true"></div>
     <div class="stats"><span id="wordcount">Word count: 0</span><span id="target"></span></div>
     <p id="status" class="status" role="status"></p>
-    <p class="notice">作答自動保存在此瀏覽器；Word 文件供閱讀與保存，無法還原作答。</p>
   </section>
 </main>
+<dialog id="figureZoom" class="figure-zoom" aria-label="放大檢視圖表"><div class="figure-zoom-bar"><span>題目圖表</span><button id="figureZoomClose" type="button" aria-label="關閉放大檢視">✕ 關閉</button></div><img id="figureZoomImg" alt="放大題目圖表"></dialog>
 <div id="hlbar" class="hlbar" hidden role="toolbar" aria-label="螢光筆">
   <button type="button" data-color="yellow" class="sw sw-yellow" aria-label="黃色螢光筆"></button><button type="button" data-color="green" class="sw sw-green" aria-label="綠色螢光筆"></button><button type="button" data-color="pink" class="sw sw-pink" aria-label="粉紅色螢光筆"></button><button type="button" data-color="blue" class="sw sw-blue" aria-label="藍色螢光筆"></button><button type="button" data-action="note" class="hl-note">註記</button><button type="button" data-action="remove" class="hl-remove">移除</button>
 </div>
@@ -73,6 +73,6 @@
 <script src="../shared.js?v=20261108a"></script>
 <script src="../vendor/docx.iife.js"></script>
 <script src="../export-docx.js?v=20261108a"></script>
-<script src="../app.js?v=20261108b"></script>
+<script src="../app.js?v=20261123b"></script>
 </body>
 </html>
