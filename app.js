@@ -114,7 +114,7 @@
     '1-R-7-1': 6, '1-R-8-2': 6, '1-R-8-3': 6
   };
   function readingReference(item) {
-    const cam = item.id.match(/^(17|18|19|21)-R-/);
+    const cam = item.id.match(/^(15|16|17|18|19|21)-R-/);
     if (cam) return `Cambridge ${cam[1]} · Test ${item.test}`;
     if (item.id === '1-R-4-3') return 'Trainer 2 General Training · Test 3';
     if (/^0-R-(?:[5-9]|1[0-2])-[123]$/.test(item.id)) return `Official Guide · Test ${item.week - 4}`;
@@ -170,8 +170,8 @@
   // Capitalised phrases, letter ranges and "A, B, C or D" are set in bold in the books' instructions.
   const instructionBold = text => [...new Set([
     ...[...text.matchAll(/\b[A-Z][A-Z/]*(?:\s+[A-Z][A-Z/]*)*\b/g)].map(m => m[0]).filter(s => /[A-Z]{2}/.test(s)),
-    ...[...text.matchAll(/\b(?:[A-I]|[ivx]{1,4})\s*[–-]\s*(?:[A-I]|[ivx]{1,4})\b/g)].map(m => m[0]),
-    ...[...text.matchAll(/\b[A-I](?:,\s*[A-I])*,?\s+or\s+[A-I]\b/g)].map(m => m[0]),
+    ...[...text.matchAll(/\b(?:[A-J]|[ivx]{1,4})\s*[–-]\s*(?:[A-J]|[ivx]{1,4})\b/g)].map(m => m[0]),
+    ...[...text.matchAll(/\b[A-J](?:,\s*[A-J])*,?\s+or\s+[A-J]\b/g)].map(m => m[0]),
   ])].map(s => ['b', s]);
   function splitOptions(line) {
     // A whole TRUE/FALSE/NOT GIVEN key, or two numbered statements ("20 After … 21 There were …"), typed on one line.
@@ -182,11 +182,11 @@
       if (at > 0) return [line.slice(0, at), ...splitOptions(line.slice(at + 1))];
     }
     if (/[.…]{4,}|_{3,}/.test(line) || line.includes(' | ')) return [line];
-    const named = line.match(/^(List of [A-Za-z ]+?)\s+(?=(?:[A-I]|i)\s+[A-Z])/);
+    const named = line.match(/^(List of [A-Za-z ]+?)\s+(?=(?:[A-J]|i)\s+[A-Z])/);
     const rest = named ? line.slice(named[0].length) : line, out = named ? [named[1]] : [];
     // Lettered word lists: three or more "X word" items, each letter once; the books list them in letter order.
-    const letters = rest.split(/\s+(?=[A-I]\s+\S)/);
-    if (letters.length >= 3 && letters.every(s => /^[A-I]\s/.test(s)) && new Set(letters.map(s => s[0])).size === letters.length) return [...out, ...letters.sort()];
+    const letters = rest.split(/\s+(?=[A-J]\s+\S)/);
+    if (letters.length >= 3 && letters.every(s => /^[A-J]\s/.test(s)) && new Set(letters.map(s => s[0])).size === letters.length) return [...out, ...letters.sort()];
     const romans = rest.split(/\s+(?=(?:ii|iii|iv|v|vi|vii|viii|ix|x|xi|xii)\s+[A-Z])/);
     if (romans.length >= 2 && /^[ivx]{1,4}\s+[A-Z]/.test(rest)) return [...out, ...romans];
     return named ? [...out, rest] : [line];
@@ -196,7 +196,7 @@
     if (/flow-?chart/i.test(instructions)) return 'flow';
     if (/complete the (?:notes|summary)/i.test(instructions) && !/list of words|correct letter/i.test(instructions)) return 'box';
     if (/complete the table/i.test(instructions)) return 'table';
-    if (/correct letter|correct number|list of|choose (?:two|three)|[A-I]\s*[–-]\s*[A-I]|headings/i.test(instructions)) return 'choice';
+    if (/correct letter|correct number|list of|choose (?:two|three)|[A-J]\s*[–-]\s*[A-J]|headings/i.test(instructions)) return 'choice';
     return 'plain';
   }
   function buildQuestions(item) {
@@ -278,25 +278,25 @@
           const rows = line.split('\n').map(r => r.split(' | '));
           // A two-column table whose first column is A, B, C… is a list of options, set as a box like the books.
           const named = /^List of\b/i.test(rows[0][0]) && rows[0].slice(1).every(c => !c.trim()) ? rows.shift()[0] : null;
-          if (rows.length && rows.every(r => r.filter(c => c.trim()).length === 2 && /^(?:[A-I]|[ivx]{1,5})$/.test(r[0].trim()))) {
+          if (rows.length && rows.every(r => r.filter(c => c.trim()).length === 2 && /^(?:[A-J]|[ivx]{1,5})$/.test(r[0].trim()))) {
             const list = el('div', 'opt-box'); if (named) list.append(el('p', 'opt-title', named));
             rows.forEach(r => { const [key, text] = r.filter(c => c.trim()); list.append(option(key.trim(), text, phrases)); }); group.append(list); mcq = null; continue;
           }
           const cells = rows.flat().filter(c => c.trim());
-          if (cells.length >= 4 && cells.every(c => /^[A-I]\s+\S/.test(c.trim()))) {
-            const list = el('div', 'opt-box'); cells.forEach(c => { const m = c.trim().match(/^([A-I])\s+(.*)$/); list.append(option(m[1], m[2], phrases)); }); group.append(list); mcq = null; continue;
+          if (cells.length >= 4 && cells.every(c => /^[A-J]\s+\S/.test(c.trim()))) {
+            const list = el('div', 'opt-box'); cells.forEach(c => { const m = c.trim().match(/^([A-J])\s+(.*)$/); list.append(option(m[1], m[2], phrases)); }); group.append(list); mcq = null; continue;
           }
           if (named) rows.unshift([named]);
           group.append(makeTable(line, (td, cell) => fillGaps(td, cell, phrases))); mcq = options = null; continue;
         }
         if (INSTRUCTION.test(line) && !/\.{3,}|_{3,}/.test(line)) { group.append(el('p', UPRIGHT.test(line) ? 'q-instr upright' : 'q-instr', rich(line, instructionBold(line)))); continue; }
-        const opt = optionsAllowed && line.match(/^(?:•\s*)?([A-I]|[ivx]{1,5})\.?\s+(\S.*)$/);
+        const opt = optionsAllowed && line.match(/^(?:•\s*)?([A-J]|[ivx]{1,5})\.?\s+(\S.*)$/);
         if (opt && !/[.…]{4,}|_{3,}/.test(line)) {
           // Handouts sometimes run two options together ("C … altered. D The participants …"); split them again.
           const parts = []; let letter = opt[1], text = opt[2];
           for (;;) {
             const next = String.fromCharCode(letter.charCodeAt(0) + 1);
-            const at = /^[A-H]$/.test(letter) ? text.search(new RegExp(`[.?]\\s+${next}\\s+(?=[A-Z])`)) : -1;
+            const at = /^[A-I]$/.test(letter) ? text.search(new RegExp(`[.?]\\s+${next}\\s+(?=[A-Z])`)) : -1;
             if (at < 0) { parts.push([letter, text]); break; }
             parts.push([letter, text.slice(0, at + 1)]); text = text.slice(at + 1).trim().slice(2); letter = next;
           }
@@ -331,7 +331,7 @@
         }
         if (kind === 'box' || kind === 'table') {
           const hasGap = /[.…]{3,}|_{3,}/.test(line);
-          if (kind === 'table') { if (!hasGap && line.length < 80) { group.append(el('p', 'table-title', rich(line, phrases))); continue; } }
+          if (kind === 'table' && lines.slice(from, to).some(l => l.includes(' | '))) { if (!hasGap && line.length < 80) { group.append(el('p', 'table-title', rich(line, phrases))); continue; } }
           else {
             const target = contentBox();
             if (!hasGap && line.length < 80 && !/^•/.test(line) && !/[.]$/.test(line)) {
@@ -352,7 +352,7 @@
       // Options are listed in letter order, and a summary's word list follows the summary.
       group.querySelectorAll('.opt-box').forEach(list => {
         const opts = [...list.querySelectorAll(':scope > .opt')];
-        if (opts.every(o => /^[A-I]$/.test(o.firstChild.textContent))) opts.sort((a, b) => a.firstChild.textContent.localeCompare(b.firstChild.textContent)).forEach(o => list.append(o));
+        if (opts.every(o => /^[A-J]$/.test(o.firstChild.textContent))) opts.sort((a, b) => a.firstChild.textContent.localeCompare(b.firstChild.textContent)).forEach(o => list.append(o));
         if (!qs.length && group.querySelector('.answer-input.gap')) group.append(list);
       });
       if (qs.length) group.querySelectorAll(':scope > .opt-box').forEach(list => {

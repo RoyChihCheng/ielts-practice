@@ -1,7 +1,7 @@
 ﻿const countWords = text => text.trim() ? text.trim().split(/\s+/u).length : 0;
 // First passage lines identified as subtitles from the dataset's formatting and structure.
 // Cambridge 21 lines lack formatting metadata, so those three are provisional.
-const passageSubtitleIds = new Set(['0-R-5-1','0-R-5-2','0-R-6-1','0-R-6-2','0-R-6-3','0-R-7-2','0-R-8-1','0-R-8-2','0-R-8-3','0-R-9-1','0-R-9-2','0-R-9-3','0-R-10-1','0-R-11-2','0-R-11-3','0-R-12-3','1-R-2-2','1-R-2-3','1-R-4-3','1-R-8-2','1-R-8-3','1-R-9-1','1-R-9-2','1-R-10-2','1-R-11-1','1-R-11-3','1-R-12-3','21-R-1-1','21-R-2-2','21-R-4-3']);
+const passageSubtitleIds = new Set(['0-R-5-1','0-R-5-2','0-R-6-1','0-R-6-2','0-R-6-3','0-R-7-2','0-R-8-1','0-R-8-2','0-R-8-3','0-R-9-1','0-R-9-2','0-R-9-3','0-R-10-1','0-R-11-2','0-R-11-3','0-R-12-3','1-R-2-2','1-R-2-3','1-R-4-3','1-R-8-2','1-R-8-3','1-R-9-1','1-R-9-2','1-R-10-2','1-R-11-1','1-R-11-3','1-R-12-3','15-R-2-3','15-R-3-1','15-R-3-3','15-R-4-1','16-R-2-2','16-R-4-2','21-R-1-1','21-R-2-2','21-R-4-3']);
 // Excludes title, identified subtitle, labels, image markers and standalone punctuation.
 const passageWordTokens = item => {
   const lines = item.passage.filter(line => !line.startsWith('[[IMG'));
