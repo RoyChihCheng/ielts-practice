@@ -959,6 +959,7 @@
   function writingType(item) {
     const text = item.prompt.join(' ').toLowerCase();
     if (item.task === 1) {
+      if (item.chartType) return item.chartType;
       const types = [];
       if (/\b(?:maps?|plans?|floor plan)\b/.test(text)) types.push('地圖／平面圖 Maps & plans');
       if (/\b(?:pie charts?)\b/.test(text)) types.push('圓餅圖 Pie charts');
@@ -971,47 +972,32 @@
       if (types.length >= 2) return 'Task 1 · 混和圖表 Mixed charts';
       return `Task 1 · ${types[0] || '圖表 Charts'}`;
     }
-    if (/advantages?.{0,80}disadvantages?|disadvantages?.{0,80}advantages?|benefits?.{0,80}drawbacks?/s.test(text)) return 'Task 2 · 優缺點 Advantages & disadvantages';
     if (/discuss both|discuss these (?:two )?views/i.test(text)) return 'Task 2 · 雙邊討論 Discuss both views';
-    if (/agree or disagree|to what extent/i.test(text)) return 'Task 2 · 同意與否 Opinion';
-    if (/problems?.{0,120}solutions?|solutions?.{0,120}problems?/s.test(text)) return 'Task 2 · 問題與解決 Problem & solution';
+    if (/advantages?.{0,80}disadvantages?|disadvantages?.{0,80}advantages?|benefits?.{0,80}(?:drawbacks?|disadvantages?)/s.test(text)) return 'Task 2 · 優缺點 Advantages & disadvantages';
+    if (/problems?.{0,120}solutions?|solutions?.{0,120}problems?|(?:causes?|reasons?).{0,140}(?:solve|tackle|prevent|action|measures)|measures.{0,80}(?:discourage|solve|tackle)/s.test(text)) return 'Task 2 · 問題與解決 Problem & solution';
+    if ((text.match(/\?/g) || []).length >= 2) return 'Task 2 · 雙重問題 Two-part questions';
+    if (/agree or disagree|to what extent|positive or (?:a )?negative/i.test(text)) return 'Task 2 · 同意與否 Opinion';
     return 'Task 2 · 其他題型 Other questions';
   }
   function writingTopic(item) {
     const text = item.prompt.join(' ').toLowerCase();
     const topics = [
-      ['全球化與時尚 Globalisation & fashion', /global fashion/],
-      ['都市住房 Housing', /enough homes|apartment blocks/],
-      ['房屋歷史 House history', /history of the house/],
-      ['海外求學 Study abroad', /study(?:ing)? abroad/],
-      ['海外工作 Working abroad', /work(?:ing)? (?:in a different country|abroad)/],
-      ['學校假期 School holidays', /school holidays/],
-      ['上課時數 School day', /school day|school hours/],
-      ['學校教育與遊戲 School learning & play', /primary schools focus/],
-      ['教育與職涯 Education & careers', /university education.*career/],
-      ['老化與長壽 Ageing population', /ageing population|life expectancy|living longer/],
-      ['兒少室內活動 Children indoors', /children and teenagers.*indoors/],
-      ['食物浪費 Food waste', /food waste|food is thrown away/],
-      ['速食與健康 Fast food & health', /fast food/],
-      ['乾淨飲水 Clean water', /access to clean water/],
-      ['環境與航空旅行 Flying & environment', /reduce the number of times they fly/],
-      ['觀光 Tourism', /touris[mt]|tourists/],
-      ['瀕危動物 Endangered species', /endangered animal/],
-      ['農業科技 Farming technology', /scientific developments in farming/],
-      ['工作與職涯 Careers', /work for (?:the same|different)|different organisations/],
-      ['遠距工作 Remote work', /working from home/],
-      ['社群媒體與人際互動 Social media & interaction', /social media.*(?:interaction|communication)/],
-      ['網路與社交 Internet & social connection', /internet.*(?:connected|isolates)/],
-      ['網路便利性 Internet convenience', /internet makes/],
-      ['數位監控 Digital surveillance', /monitor what people|cellphone tracking/],
-      ['手機使用 Smartphone use', /free time using a smartphone/],
-      ['電影院與線上娛樂 Cinema & online entertainment', /theatres and cinemas/],
-      ['交通壅塞 Traffic congestion', /traffic jam/],
-      ['人口與都市化 Population & urbanisation', /population|rural people.*moving to cities/],
-      ['經濟與社會進步 Economic progress', /economic progress/],
-      ['消費與負債 Consumer debt', /get into debt/],
-      ['購物與在地商店 Local shops & online shopping', /local shops.*(?:supermarkets|online)/],
-      ['多代同堂 Multigenerational households', /multi-generational households/]
+      ['都市住房與建築 Housing & buildings', /enough homes|apartment blocks|owning a home|history of the house/],
+      ['校園與教育場所 Campus & schools', /riverside university campus|west park secondary school|college café|science park/],
+      ['圖書館與公共設施 Libraries & facilities', /public library|library users|social centre|health centres/],
+      ['地方發展與城鎮規劃 Town & site development', /industrial area|norbiton|harbour|site of a farm|airport|centre of a town|stokeford|oakhaven/],
+      ['海外求學與工作 Study & work abroad', /study(?:ing)? abroad|work(?:ing)? (?:in a different country|abroad)|work in the country where they did their training/],
+      ['教育與校園生活 Education & schooling', /school holidays|school day|school hours|primary schools focus|university education.*career|university students want to learn|undergraduate courses/],
+      ['工作、職涯與薪資 Work, jobs & income', /work for (?:the same|different)|different organisations|working from home|working week|number of jobs|anthropology graduates|weekly income|households in the us/],
+      ['政府、治安與經濟 Government, crime & economy', /police budget|crime|economic progress/],
+      ['廣告與消費 Advertising & consumerism', /advertising|get into debt|save money|giving money to charity|expenditure by students|online shopping|local shops|shops? that closed|coffee and tea/],
+      ['飲食與健康 Health, food & diet', /fast food|food waste|food is thrown away|food produced all over|sugary products|alternative medicines|living longer|ageing population|life expectancy/],
+      ['人口與都市化 Population & urbanisation', /population|rural people.*moving to cities|percentage of the population.*living in cities|multi-generational households/],
+      ['科技與數位生活 Technology & digital life', /internet|digital|smartphone|mobile phone|social media|cellphone tracking|monitor what people|artificial intelligence|accessing news|electrical appliances|housework|printed newspapers|theatres and cinemas|rentals and sales.*films|technology/],
+      ['交通與旅行 Transport & travel', /traffic jam|public transport|driverless|reduce the number of times they fly|touris[mt]|tourists/],
+      ['環境、能源與資源 Environment, energy & resources', /clean water|rainwater|renewable energy|waste materials recycled|recycling plastic|endangered animal|rain-shadow desert|temperatures.*sunshine|climate|prices of three metals/],
+      ['生產製造與自然科學 Manufacturing & science', /biofuel|ethanol|bamboo|honeybee|honey is made|instant noodles|sugar from sugar cane|aim of science|farming|exports/],
+      ['文化、時尚與社會態度 Culture, fashion & society', /global fashion|take risks|competition.*cooperate|achieve anything|dance classes|children and teenagers.*indoors/]
     ];
     return topics.find(([, pattern]) => pattern.test(text))?.[0] || '主題請見題目預覽';
   }
