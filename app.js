@@ -291,7 +291,9 @@
         }
         if (INSTRUCTION.test(line) && !/\.{3,}|_{3,}/.test(line)) { group.append(el('p', UPRIGHT.test(line) ? 'q-instr upright' : 'q-instr', rich(line, instructionBold(line)))); continue; }
         const opt = optionsAllowed && line.match(/^(?:•\s*)?([A-J]|[ivx]{1,5})\.?\s+(\S.*)$/);
-        if (opt && !/[.…]{4,}|_{3,}/.test(line)) {
+        // A summary title straight after the instructions ("A birthday gift") is not option A.
+        const summaryTitle = INSTRUCTION.test(lines[k - 1] || '') && line.length < 80 && !/[.?:,]$/.test(line) && blankPattern.test(lines[k + 1] || '');
+        if (opt && !summaryTitle && !/[.…]{4,}|_{3,}/.test(line)) {
           // Handouts sometimes run two options together ("C … altered. D The participants …"); split them again.
           const parts = []; let letter = opt[1], text = opt[2];
           for (;;) {
