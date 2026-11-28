@@ -1106,6 +1106,19 @@
     } catch { alert('備份檔無效，請選擇從本網站下載的 JSON 檔。'); }
     e.target.value = '';
   });
+  let allowLeave = false;
+  document.querySelectorAll('a.brand, .more-menu a[href]').forEach(link => {
+    link.addEventListener('click', e => {
+      if (!activeItem) return;
+      if (!confirm('確定要離開目前的練習並跳轉頁面嗎？（作答與畫記已自動保留在此瀏覽器）')) { e.preventDefault(); return; }
+      allowLeave = true;
+    });
+  });
+  addEventListener('beforeunload', e => {
+    if (allowLeave || !activeItem) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
   openFromHash();
   addEventListener('hashchange', openFromHash);
 })();
