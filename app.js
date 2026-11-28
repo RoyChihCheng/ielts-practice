@@ -116,6 +116,7 @@
   function readingReference(item) {
     const cam = item.id.match(/^(15|16|17|18|19|21)-R-/);
     if (cam) return `Cambridge ${cam[1]} · Test ${item.test}`;
+    if (item.id.startsWith('custom-R-')) return `自製題庫 · Set ${item.test}`;
     if (item.id === '1-R-4-3') return 'Trainer 2 General Training · Test 3';
     if (/^0-R-(?:[5-9]|1[0-2])-[123]$/.test(item.id)) return `Official Guide · Test ${item.week - 4}`;
     if (/^1-R-(?:9|1[0-2])-[123]$/.test(item.id)) return `Cambridge 20 · Test ${item.week - 8}`;
@@ -412,19 +413,22 @@
     const given = tf ? (TFNG[norm(answer)] || norm(answer)) : norm(answer);
     return keys.some(k => { const want = norm(k); return given === want || given.replace(/[-\s]/g, '') === want.replace(/[-\s]/g, ''); });
   }
-  function results() {
-    const item = activeItem, out = {};
-    if (!item?.answers) return out;
+  function scoreFor(item, answers) {
+    const out = {};
+    if (!item?.answers) return { out, score: 0, keyed: 0 };
     for (let n = item.start; n <= item.end; n++) {
       const keys = item.answers[n]; if (!keys) continue;
-      out[n] = { keys, ok: !!drafts.answers[n - 1].trim() && matches(drafts.answers[n - 1], keys) };
+      const given = (answers[n - 1] || '').trim();
+      out[n] = { keys, ok: !!given && matches(given, keys) };
     }
     // "Choose TWO" pairs: either order counts, but the same letter twice only scores once.
     for (const [a, b] of item.pairs || []) {
-      if (out[a] && out[b] && out[a].ok && out[b].ok && norm(drafts.answers[a - 1]) === norm(drafts.answers[b - 1])) out[b].ok = false;
+      if (out[a] && out[b] && out[a].ok && out[b].ok && norm(answers[a - 1] || '') === norm(answers[b - 1] || '')) out[b].ok = false;
     }
-    return out;
+    const vals = Object.values(out);
+    return { out, score: vals.filter(r => r.ok).length, keyed: vals.length };
   }
+  function results() { return scoreFor(activeItem, drafts.answers).out; }
   function clearResults() {
     document.querySelectorAll('.key-answer').forEach(el => el.remove());
     document.querySelectorAll('.answer-input').forEach(el => el.classList.remove('is-correct', 'is-wrong'));
@@ -462,6 +466,7 @@
     $('checkBtn').classList.toggle('active', checking);
     if (checking) {
       if (deadline) $('timer').click(); // pause the clock while reviewing
+      try { localStorage.setItem(`ielts-reading-checked-${activeItem.id}`, '1'); } catch {}
       const { score, keyed } = showResults();
       $('status').textContent = `已對答案：${score} / ${keyed}。可在「筆記」下載你的作答、畫線與註記。`;
     } else { showResults(); }
@@ -830,8 +835,10 @@
     else if (action === 'remove' && barMark) removeMark(barMark);
     hideBar();
   });
-  document.addEventListener('mousedown', e => { if (!e.target.closest('#hlbar') && !e.target.closest('#textView, #questionText')) hideBar(); });
+  document.addEventListener('mousedown', e => { if (!e.target.closest('#hlbar')) hideBar(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') hideBar(); });
   $('textView').addEventListener('scroll', hideBar);
+  if (kind === 'reading') $('questionText').addEventListener('scroll', hideBar);
 
   function renderNotes() {
     const list = $('marksList'); list.replaceChildren();
@@ -954,7 +961,18 @@
   function progress(item) {
     try {
       const saved = JSON.parse(localStorage.getItem(`ielts-${kind}-question-${item.id}`) || 'null'); if (!saved) return '';
-      if (kind === 'reading') { const done = saved.answers.slice(item.start - 1, item.end).filter(a => a.trim()).length; return done ? `${done}/${item.end - item.start + 1}` : ''; }
+      if (kind === 'reading') {
+        const total = item.end - item.start + 1;
+        const done = saved.answers.slice(item.start - 1, item.end).filter(a => a.trim()).length;
+        if (!done) return '';
+        let checked = false;
+        try { checked = localStorage.getItem(`ielts-reading-checked-${item.id}`) === '1'; } catch {}
+        if (item.answers && (checked || done === total)) {
+          const { score, keyed } = scoreFor(item, saved.answers);
+          return `已答 ${done}/${total} · 答對 ${score}/${keyed}`;
+        }
+        return `${done}/${total}`;
+      }
       const words = countWords(saved[item.task === 1 ? 'task1' : 'task2'] || ''); return words ? `${words} 字` : '';
     } catch { return ''; }
   }
